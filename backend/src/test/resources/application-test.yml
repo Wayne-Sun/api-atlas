@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MYSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+
+pagehelper:
+  helper-dialect: h2
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+
+atlas:
+  encryption:
+    secret-key: rXR8URht+cFpwxkKsjtZsH03r3aEyLJn1/CBKI9H7LE=
+  executor:
+    ibatis:
+      max-memory-rows: 1000

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.api.atlas.mapper.InterfaceParamMapper">
+
+    <resultMap id="BaseResultMap" type="InterfaceParam">
+        <id property="id" column="id"/>
+        <result property="interfaceId" column="interface_id"/>
+        <result property="paramName" column="param_name"/>
+        <result property="javaType" column="java_type"/>
+        <result property="remark" column="remark"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, interface_id, param_name, java_type, remark, sort_order, created_at
+    </sql>
+
+    <insert id="insertBatch" parameterType="list">
+        INSERT INTO interface_param (interface_id, param_name, java_type, remark, sort_order)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.interfaceId}, #{item.paramName}, #{item.javaType}, #{item.remark}, #{item.sortOrder})
+        </foreach>
+    </insert>
+
+    <select id="selectByInterfaceId" parameterType="long" resultMap="BaseResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM interface_param
+        WHERE interface_id = #{interfaceId}
+        ORDER BY sort_order ASC
+    </select>
+
+    <delete id="deleteByInterfaceId" parameterType="long">
+        DELETE FROM interface_param WHERE interface_id = #{interfaceId}
+    </delete>
+
+</mapper>

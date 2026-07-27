@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/api_atlas?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: api_atlas
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      continue-on-error: true
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.api.atlas.model
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+logging:
+  level:
+    com.api.atlas.mapper: INFO
+
+pagehelper:
+  helper-dialect: mysql
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+
+atlas:
+  encryption:
+    secret-key: CHANGE_ME_PLEASE_REPLACE_WITH_BASE64_32_BYTE_KEY
+  elasticsearch:
+    protocol: http
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      maximum-lifetime: 1800000
+      keepalive-time: 300000
+  executor:
+    ibatis:
+      max-memory-rows: 100000
+      cache-max-size: 100

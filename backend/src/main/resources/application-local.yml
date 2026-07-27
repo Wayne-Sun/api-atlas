@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    password: api_atlas@2026
+
+atlas:
+  encryption:
+    secret-key: HEzRd71Vy82EHpkyzczNpJqf8efNxEwafQeE4KVVdw8=

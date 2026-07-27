@@ -1,0 +1,34 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor temp files
+*.swp
+*.swo
+*.sw?
+
+# Project-level directories
+.omo/
+
+# CodeGraph index (symlink to user-local cache)
+.codegraph
+
+# Playwright MCP artifacts (runtime logs, page captures, screenshots)
+.playwright-mcp/
+
+# Maven build artifacts extracted at project root
+META-INF/
+
+# Env
+.env.local
+.env.*.local
+*.local
