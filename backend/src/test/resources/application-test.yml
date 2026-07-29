@@ -1,4 +1,14 @@
 spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
   datasource:
     url: jdbc:h2:mem:testdb;MODE=MYSQL;DB_CLOSE_DELAY=-1
     username: sa
@@ -21,3 +31,45 @@ atlas:
   executor:
     ibatis:
       max-memory-rows: 1000
+  jwt:
+    private-key: |
+      -----BEGIN PRIVATE KEY-----
+      MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC1KyXmGGpHc/ce
+      6FL4mUgBI09xdNiYj1fmfGGgfpvBrtHFpwQ4U+1Lie7ydUbOZ+5UgEqaP+K9HDHF
+      31gQk1PmwrvjYqrpnKPZAti3jFJCUK9pTppNabVggfsqMrxD0loMhHBQOUe/3awg
+      MRD+IX3eUxVXghSMz1IMR77yglVAP0UyjSDtKy1FZud6Tv8BoCg8B65lCD9ybpC5
+      Rv+uxPQB+C3ENDaG9vZt+Zm9Bey5pHlc1p0nfKD/WQl84flxVVmp1i+3DPw2qRCa
+      MkBs9ztV0aqYHgtETn/feITMZK1NNVnKYiHrYf3nHiNd6CVko8U3dAZO5DiFTnB1
+      W/r9WdPfAgMBAAECggEAKEwwMmW04i7jxX600fI6Z3Jkvd5ZPVoJGc4J4yq2V5cc
+      twPG9waIDljgixLWDJxmkWo17eiO9TSbx6E90/YJYBdptpLgZHVApskwzmcKdxC+
+      a8SdouGEBDL1XLYLVWSpPgaJeva6xG0417JCTtzBRB4j7aKUEpwc6nlc+lFOSCtK
+      1Vu0qcIajsD/4fxYo0drgO4YZFTZPpGZ/X5PMc0i5zr/x1bG2aGbN8SIC9XIuJCv
+      /e6+neYVRDNhwlu96cVry5n72l95X558veoBgHDsbmkR+uVN2Nm56O4zzmBndhtV
+      Ti8hUIToY4qnRfR84lUZwyHpD5DnovE6cR2qT3M6WQKBgQDbKA2h8dASBxrMVEqX
+      I1gVLt+0vhFz47WuObnZm9d0f/Qa54w8NNjX5ArepdWE2Vlcle30LhUPHCHJt2b9
+      7XE88IVdK6QSpMi3i3NETJvShAaLYAPiymDs6+lfvzNz0LuITU6dXFz2+dG0NGXk
+      1dZ9+ImbE3ZhLXC/FgQj8Qyq2QKBgQDToDCgt7+6KHwx/vuxcq6wYISYwAvQkF3s
+      x1qzWA1QydEpzMMf0NdA1peRivlJ4lLG5CusU3AaDY/ztYsiVZE2fqWycewwCG9p
+      3ZHsjOni+FlqFWeiZJk49Kneb6VlPXOw4r1jbTgP1Nf9Cb6c/HR4FqUDX/4Ilnuz
+      6avzg04RdwKBgQCLIKlO5tllqHb9woE746c2g3RnJMaloKik+2ad3A5ymgxYzCg9
+      zHrgy5eO8w5S8TyGx3OxsVOTLRPSIAlVKNjbjAHOPTdC0rPNucyqTkwZ39DbyE+P
+      OVVA8x9LtnEulBOJmzJOOeWWsM/NK/qHxK0Peam59igP1y4dURe9zXhyOQKBgAmT
+      BMAwr/7nF/9XDuIPUzHtm/IhNiegcG9m8YaNpESUbN8cQXOuCh8H1mGiTPb3w1D2
+      P7eTKs4y8OFQxFOwVVqGzk5NcycVKp06hgCSu34mSD1RbJffP0NhZlIG8Q+sgRBu
+      oaze4xtsQL1U9Ie7sDVCqQKHFEIlNMGF/96LgTuvAoGBAMnmczkDKH3hWWXC61xX
+      Gu4ahvLDwD3KZby34hUwRyKeyUDN5yH3cgLlOoqZzJsf7pIWDJ+nbmhtPWtcWCG0
+      1HMRpr5KpeQNVRyh3s56dFpeyDPFstAyzpQc1t/nV0Lgk4e3L6OC8b+Jf97/P9bY
+      ucnYj7VN+s4K71c0YFpBvLWx
+      -----END PRIVATE KEY-----
+    public-key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtSsl5hhqR3P3HuhS+JlI
+      ASNPcXTYmI9X5nxhoH6bwa7RxacEOFPtS4nu8nVGzmfuVIBKmj/ivRwxxd9YEJNT
+      5sK742Kq6Zyj2QLYt4xSQlCvaU6aTWm1YIH7KjK8Q9JaDIRwUDlHv92sIDEQ/iF9
+      3lMVV4IUjM9SDEe+8oJVQD9FMo0g7SstRWbnek7/AaAoPAeuZQg/cm6QuUb/rsT0
+      AfgtxDQ2hvb2bfmZvQXsuaR5XNadJ3yg/1kJfOH5cVVZqdYvtwz8NqkQmjJAbPc7
+      VdGqmB4LRE5/33iEzGStTTVZymIh62H95x4jXeglZKPFN3QGTuQ4hU5wdVv6/VnT
+      3wIDAQAB
+      -----END PUBLIC KEY-----
+    access-token-expiration: 1800
+    refresh-token-expiration: 604800

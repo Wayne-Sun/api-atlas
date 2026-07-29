@@ -32,3 +32,4 @@ META-INF/
 .env.local
 .env.*.local
 *.local
+application-local.yml

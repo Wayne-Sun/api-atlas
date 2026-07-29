@@ -86,8 +86,9 @@ class DataSourceServiceTest {
         assertThat(result.getPassword()).isEqualTo("encrypted:test-password");
         assertThat(result.getApiKey()).isEqualTo("test-api-key");
         assertThat(result.getStatus()).isEqualTo("ENABLED");
-        assertThat(result.getCreatedAt()).isNotNull();
-        assertThat(result.getUpdatedAt()).isNotNull();
+
+        // createdAt and updatedAt are now set by AuditInterceptor (MyBatis plugin)
+        // — no longer set manually in the service layer
 
         encryptionUtil.verify(() -> EncryptionUtil.encrypt("raw-password", secretKey));
     }
@@ -207,10 +208,10 @@ class DataSourceServiceTest {
         DataSource ds = new DataSource();
         ds.setId(1L);
         when(dataSourceMapper.selectById(1L)).thenReturn(ds);
-        when(dataSourceMapper.updateStatus(1L, "DISABLED")).thenReturn(1);
+        when(dataSourceMapper.updateById(any(DataSource.class))).thenReturn(1);
 
         dataSourceService.updateStatus(1L, "DISABLED");
 
-        verify(dataSourceMapper).updateStatus(1L, "DISABLED");
+        verify(dataSourceMapper).updateById(argThat(d -> d.getId() == 1L && "DISABLED".equals(d.getStatus())));
     }
 }

@@ -1,7 +1,8 @@
 package com.api.atlas.config;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
-import co.elastic.clients.json.jackson.JacksonJsonpMapper;
+import co.elastic.clients.json.JsonpMapper;
+import co.elastic.clients.json.SimpleJsonpMapper;
 import co.elastic.clients.transport.rest_client.RestClientTransport;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
@@ -14,7 +15,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ElasticsearchClientFactory implements DataSourceFactory<ElasticsearchClient> {
 
-    private static final JacksonJsonpMapper MAPPER = new JacksonJsonpMapper();
+    private final JsonpMapper mapper = new SimpleJsonpMapper();
 
     @Value("${atlas.elasticsearch.protocol:http}")
     private String esProtocol;
@@ -34,7 +35,7 @@ public class ElasticsearchClientFactory implements DataSourceFactory<Elasticsear
         }
 
         RestClient restClient = builder.build();
-        RestClientTransport transport = new RestClientTransport(restClient, MAPPER);
+        RestClientTransport transport = new RestClientTransport(restClient, mapper);
         return new ElasticsearchClient(transport);
     }
 

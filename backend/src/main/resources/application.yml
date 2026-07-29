@@ -10,6 +10,16 @@ spring:
     init:
       mode: always
       continue-on-error: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -43,3 +53,8 @@ atlas:
     ibatis:
       max-memory-rows: 100000
       cache-max-size: 100
+  jwt:
+    private-key: CHANGE_ME_PLEASE_REPLACE_WITH_RSA_PRIVATE_KEY_PEM
+    public-key: CHANGE_ME_PLEASE_REPLACE_WITH_RSA_PUBLIC_KEY_PEM
+    access-token-expiration: 1800
+    refresh-token-expiration: 604800

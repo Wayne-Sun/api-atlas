@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.api.atlas.mapper.UserMapper">
+
+    <resultMap id="BaseResultMap" type="User">
+        <id property="id" column="id"/>
+        <result property="username" column="username"/>
+        <result property="password" column="password"/>
+        <result property="displayName" column="display_name"/>
+        <result property="role" column="role"/>
+        <result property="status" column="status"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="lastModifiedBy" column="last_modified_by"/>
+        <result property="lastModifiedAt" column="last_modified_at"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, username, password, display_name, role, status,
+        created_by, created_at, last_modified_by, last_modified_at
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="User">
+        INSERT INTO sys_user (username, password, display_name, role, status,
+                              created_by, created_at, last_modified_by, last_modified_at)
+        VALUES (#{username}, #{password}, #{displayName}, #{role}, #{status},
+                #{createdBy}, #{createdAt}, #{lastModifiedBy}, #{lastModifiedAt})
+    </insert>
+
+    <select id="selectById" parameterType="long" resultMap="BaseResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM sys_user
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectByUsername" resultMap="BaseResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM sys_user
+        WHERE username = #{username}
+    </select>
+
+    <select id="selectList" resultMap="BaseResultMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM sys_user
+        <where>
+            <if test="username != null and username != ''">
+                AND username LIKE CONCAT('%', #{username}, '%')
+            </if>
+            <if test="role != null and role != ''">
+                AND role = #{role}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="updateById" parameterType="User">
+        UPDATE sys_user
+        <set>
+            <if test="username != null">username = #{username},</if>
+            <if test="password != null">password = #{password},</if>
+            <if test="displayName != null">display_name = #{displayName},</if>
+            <if test="role != null">role = #{role},</if>
+            <if test="status != null">status = #{status},</if>
+            last_modified_by = #{lastModifiedBy},
+            last_modified_at = #{lastModifiedAt},
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById" parameterType="long">
+        DELETE FROM sys_user WHERE id = #{id}
+    </delete>
+
+</mapper>

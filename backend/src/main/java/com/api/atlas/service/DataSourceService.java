@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -53,8 +52,6 @@ public class DataSourceService {
         dataSource.setPassword(encrypt(dto.getPassword()));
         dataSource.setApiKey(dto.getApiKey());
         dataSource.setStatus("ENABLED");
-        dataSource.setCreatedAt(LocalDateTime.now());
-        dataSource.setUpdatedAt(LocalDateTime.now());
         dataSourceMapper.insert(dataSource);
         return dataSource;
     }
@@ -110,7 +107,6 @@ public class DataSourceService {
             existing.setStatus(dto.getStatus());
         }
 
-        existing.setUpdatedAt(LocalDateTime.now());
         dataSourceMapper.updateById(existing);
         return dataSourceMapper.selectById(id);
     }
@@ -132,6 +128,7 @@ public class DataSourceService {
         if (existing == null) {
             throw new NoSuchElementException("DataSource not found: " + id);
         }
-        dataSourceMapper.updateStatus(id, status);
+        existing.setStatus(status);
+        dataSourceMapper.updateById(existing);
     }
 }

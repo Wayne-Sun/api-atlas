@@ -13,23 +13,27 @@
         <result property="password" column="password"/>
         <result property="apiKey" column="api_key"/>
         <result property="status" column="status"/>
+        <result property="createdBy" column="created_by"/>
         <result property="createdAt" column="created_at"/>
+        <result property="lastModifiedBy" column="last_modified_by"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <sql id="BaseColumns">
         id, name, type, host, port, database_name, username, password, api_key,
-        status, created_at, updated_at
+        status, created_by, created_at, last_modified_by, updated_at
     </sql>
 
     <sql id="ListColumns">
         id, name, type, host, port, database_name, username,
-        status, created_at, updated_at
+        status, created_by, created_at, last_modified_by, updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="DataSource">
-        INSERT INTO data_source (name, type, host, port, database_name, username, password, api_key, status)
-        VALUES (#{name}, #{type}, #{host}, #{port}, #{databaseName}, #{username}, #{password}, #{apiKey}, #{status})
+        INSERT INTO data_source (name, type, host, port, database_name, username, password, api_key, status,
+                                 created_by, created_at, last_modified_by, updated_at)
+        VALUES (#{name}, #{type}, #{host}, #{port}, #{databaseName}, #{username}, #{password}, #{apiKey}, #{status},
+                #{createdBy}, #{createdAt}, #{lastModifiedBy}, #{updatedAt})
     </insert>
 
     <select id="selectById" parameterType="long" resultMap="BaseResultMap">
@@ -67,6 +71,8 @@
             <if test="password != null">password = #{password},</if>
             <if test="apiKey != null">api_key = #{apiKey},</if>
             <if test="status != null">status = #{status},</if>
+            updated_at = #{updatedAt},
+            last_modified_by = #{lastModifiedBy},
         </set>
         WHERE id = #{id}
     </update>

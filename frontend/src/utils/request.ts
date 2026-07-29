@@ -19,6 +19,18 @@ const request: AxiosInstance = axios.create({
   timeout: 30000
 })
 
+// Request interceptor: attach Bearer token from localStorage
+request.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token && token !== 'null') {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
 // Response interceptor: unwrap data.data, handle errors
 request.interceptors.response.use(
   (response: AxiosResponse<ApiResponse<unknown>>) => {
@@ -30,6 +42,10 @@ request.interceptors.response.use(
     return response
   },
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token')
+      window.location.hash = '#/login'
+    }
     const msg = error.response?.data?.message || error.message || 'Network error'
     NMessage.error(msg)
     return Promise.reject(error)

@@ -15,7 +15,9 @@
         <result property="isPaginated" column="is_paginated"/>
         <result property="pageSize" column="page_size"/>
         <result property="status" column="status"/>
+        <result property="createdBy" column="created_by"/>
         <result property="createdAt" column="created_at"/>
+        <result property="lastModifiedBy" column="last_modified_by"/>
         <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
@@ -23,14 +25,17 @@
         api_interface.id, api_interface.english_name, api_interface.chinese_name, api_interface.url_slug,
         api_interface.method, api_interface.data_source_id, ds.name AS data_source_name,
         api_interface.query_type, api_interface.query_content, api_interface.is_paginated,
-        api_interface.page_size, api_interface.status, api_interface.created_at, api_interface.updated_at
+        api_interface.page_size, api_interface.status, api_interface.created_by,
+        api_interface.created_at, api_interface.last_modified_by, api_interface.updated_at
     </sql>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="ApiInterface">
         INSERT INTO api_interface (english_name, chinese_name, url_slug, method, data_source_id,
-                                    query_type, query_content, is_paginated, page_size, status)
+                                    query_type, query_content, is_paginated, page_size, status,
+                                    created_by, created_at, last_modified_by, updated_at)
         VALUES (#{englishName}, #{chineseName}, #{urlSlug}, #{method}, #{dataSourceId},
-                #{queryType}, #{queryContent}, #{isPaginated}, #{pageSize}, #{status})
+                #{queryType}, #{queryContent}, #{isPaginated}, #{pageSize}, #{status},
+                #{createdBy}, #{createdAt}, #{lastModifiedBy}, #{updatedAt})
     </insert>
 
     <select id="selectById" parameterType="long" resultMap="BaseResultMap">
@@ -80,6 +85,8 @@
             <if test="isPaginated != null and isPaginated == true">is_paginated = #{isPaginated},</if>
             <if test="pageSize != null">page_size = #{pageSize},</if>
             <if test="status != null">status = #{status},</if>
+            updated_at = #{updatedAt},
+            last_modified_by = #{lastModifiedBy},
         </set>
         WHERE id = #{id}
     </update>

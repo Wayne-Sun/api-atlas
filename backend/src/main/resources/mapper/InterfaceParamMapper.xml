@@ -9,18 +9,24 @@
         <result property="javaType" column="java_type"/>
         <result property="remark" column="remark"/>
         <result property="sortOrder" column="sort_order"/>
+        <result property="createdBy" column="created_by"/>
+        <result property="lastModifiedBy" column="last_modified_by"/>
         <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
     </resultMap>
 
     <sql id="BaseColumns">
-        id, interface_id, param_name, java_type, remark, sort_order, created_at
+        id, interface_id, param_name, java_type, remark, sort_order,
+        created_by, last_modified_by, created_at, updated_at
     </sql>
 
     <insert id="insertBatch" parameterType="list">
-        INSERT INTO interface_param (interface_id, param_name, java_type, remark, sort_order)
+        INSERT INTO interface_param (interface_id, param_name, java_type, remark, sort_order,
+                                     created_by, created_at, last_modified_by, updated_at)
         VALUES
         <foreach collection="list" item="item" separator=",">
-            (#{item.interfaceId}, #{item.paramName}, #{item.javaType}, #{item.remark}, #{item.sortOrder})
+            (#{item.interfaceId}, #{item.paramName}, #{item.javaType}, #{item.remark}, #{item.sortOrder},
+             #{item.createdBy}, #{item.createdAt}, #{item.lastModifiedBy}, #{item.updatedAt})
         </foreach>
     </insert>
 

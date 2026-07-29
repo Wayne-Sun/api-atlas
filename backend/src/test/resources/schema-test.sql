@@ -50,3 +50,33 @@ CREATE TABLE IF NOT EXISTS interface_param (
     INDEX idx_interface_id (interface_id),
     CONSTRAINT fk_param_interface FOREIGN KEY (interface_id) REFERENCES api_interface(id) ON DELETE CASCADE
 );
+
+-- ============================================================
+-- Audit fields (migration)
+-- ============================================================
+
+ALTER TABLE data_source ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE data_source ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(100);
+
+ALTER TABLE api_interface ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE api_interface ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(100);
+
+ALTER TABLE interface_param ADD COLUMN IF NOT EXISTS created_by VARCHAR(100);
+ALTER TABLE interface_param ADD COLUMN IF NOT EXISTS last_modified_by VARCHAR(100);
+ALTER TABLE interface_param ADD COLUMN IF NOT EXISTS updated_at DATETIME;
+
+CREATE TABLE IF NOT EXISTS sys_user (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100),
+    role VARCHAR(20) NOT NULL DEFAULT 'USER',
+    status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+    created_by VARCHAR(100),
+    created_at DATETIME,
+    last_modified_by VARCHAR(100),
+    last_modified_at DATETIME,
+    UNIQUE (username),
+    INDEX idx_username (username),
+    INDEX idx_role (role)
+);

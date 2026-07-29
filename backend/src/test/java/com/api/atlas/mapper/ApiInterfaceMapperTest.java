@@ -1,5 +1,6 @@
 package com.api.atlas.mapper;
 
+import com.api.atlas.config.AuditInterceptor;
 import com.api.atlas.model.ApiInterface;
 import com.api.atlas.model.DataSource;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.mybatis.spring.boot.test.autoconfigure.MybatisTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
@@ -17,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @MybatisTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
+@Import(AuditInterceptor.class)
 class ApiInterfaceMapperTest {
 
     @Autowired

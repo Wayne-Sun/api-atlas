@@ -7,12 +7,21 @@ Vue 3 + Vite 8 + TypeScript 6 + Naive UI 2.44 + Pinia + Vue Router (hash mode).
 | Task | Location | Notes |
 |------|----------|-------|
 | Add page | `src/views/` | New .vue file, add route in `router/index.ts` |
-| Add component | `src/components/` | Reusable UI components |
+| Add component | `src/views/*/components/` | View-scoped reusable components (e.g., `user/components/UserFormModal.vue`) |
 | Add store | `src/stores/` | Pinia composition API, export `useXxxStore()` |
-| Add API call | `src/utils/request.ts` | Axios instance with interceptors |
+| Add auth store | `src/stores/auth.ts` | Token, currentUser, login/logout, isAuthenticated, isAdmin |
+| Add user store | `src/stores/user.ts` | User CRUD (admin), UserInfo/UserCreateDTO/UserUpdateDTO types |
+| Add API call | `src/utils/request.ts` | Axios instance with Bearer token + interceptors |
+| Add Naive UI plugin | `src/utils/naive-ui.ts` | Tree-shaken `create()` component list |
 | Global config | `vite.config.ts` | Aliases, plugins, proxy |
+| Test config | `vitest.config.ts` | jsdom, @ alias, V8 coverage |
 | Layout wrapper | `src/layouts/BaseLayout.vue` | Parent route with `<router-view>` |
-| Type definitions | `src/types/` or inline in stores | TypeScript interfaces |
+| Login page | `src/views/login/index.vue` | Public route, no BaseLayout |
+| User page | `src/views/user/index.vue` | Admin-only route |
+| Interface test | `src/views/interface/TestView.vue` | Query test runner |
+| NotFound | `src/views/NotFound.vue` | 404 catch-all `/:pathMatch(.*)*` |
+| Route guard | `src/router/index.ts` | `beforeEach` — auth check + admin check |
+| Type definitions | `src/stores/*.ts` or inline | TypeScript interfaces matching backend DTOs |
 
 ## CONVENTIONS
 
@@ -23,10 +32,14 @@ Vue 3 + Vite 8 + TypeScript 6 + Naive UI 2.44 + Pinia + Vue Router (hash mode).
 - Type all reactive variables explicitly: `const x = ref<string>('')` or `const x = ref<string | null>(null)`.
 
 ### Naive UI
-- Components imported from `naive-ui` in each file (tree-shaking friendly).
-- Global registration in `main.ts` for common components (NButton, NInput, NSelect, NDataTable, NCard, NTag, NSwitch, NSpace, NEmpty, NPopconfirm, NForm, NFormItem, NMessage).
-- Use `h()` render functions for DataTable column renderers and dynamic components.
-- Message/Notification: `message.success()`, `message.error()`, `notification.success()` from `naive-ui`.
+- Naive UI 使用 **`create()` API 按需注册组件**（不再是全局 `app.use(naive)`），在 `src/utils/naive-ui.ts` 中维护组件列表。
+- **`main.ts` 中只 `app.use(naiveUiPlugin)`**，不单独注册任何组件。
+- 每个 .vue 文件仍需显式 `import { NButton } from 'naive-ui'`（tree-shaking 需要）。
+- 使用 `h()` render 函数（而非 template）实现 DataTable 列渲染、自定义触发器。
+- `NPopconfirm` 用于删除确认：`h(NPopconfirm, { onPositiveClick: () => handleDelete(row) }, { trigger: () => h(NButton, ...), default: () => '确定删除？' })`。
+- `NDataTable` 的 `empty` prop 传 render function：`:empty="() => h(NEmpty, { description: '暂无数据' })"`（不可直接传 VNode）。
+- `createDiscreteApi()` 在 `request.ts` 中独立使用，与 `create()` 兼容。
+- 当前 `naive-ui.ts` 注册的组件列表：NButton, NCard, NConfigProvider, NDataTable, NEmpty, NForm, NFormItem, NIcon, NInput, NInputNumber, NLayout, NLayoutContent, NLayoutHeader, NLayoutSider, NMenu, NPopconfirm, NSelect, NSpace, NSwitch, NTag, NText。
 
 ### Pinia Stores
 - Composition API style: `export const useXxxStore = defineStore('xxx', () => { ... })`.
@@ -34,24 +47,49 @@ Vue 3 + Vite 8 + TypeScript 6 + Naive UI 2.44 + Pinia + Vue Router (hash mode).
 - Actions: `async function` returning typed results.
 - Getters: `computed` for derived state.
 - Export everything in return object: `return { state, action, getter }`.
+- Loading state bound to `NDataTable :loading`.
+
+### Auth Store & Flow
+- `auth.ts` store: `token` (localStorage), `currentUser`, `isAuthenticated` (computed from token), `isAdmin` (computed from role)。
+- `login()`: POST /api/auth/login → 保存 `data.accessToken` 到 localStorage + store → 设置 `currentUser` → 返回 data。
+- `logout()`: POST /api/auth/logout → `clearStore()` (清理 token + currentUser)。
+- `fetchMe()`: GET /api/auth/me → 更新 currentUser (页面刷新后恢复 session)。
+- `initFromStorage()`: 如果 token 存在且不为 null, 调用 `fetchMe()`; 否则 `clearStore()`。
+- Token 持久化: localStorage `token` key; request interceptor 自动添加 `Authorization: Bearer {token}`。
+- 401 响应: response interceptor 自动清理 token 并重定向到 /login。
+- `UserInfo` 接口: `{ id, username, displayName, role }`。
+
+### User Store
+- `user.ts` store: `userList`, `pagination` (reactive `{ page, pageSize, total }`), `loading`.
+- `fetchUsers()`: GET /api/users with pageNum/pageSize params.
+- `createUser()`: POST /api/users with `UserCreateDTO`.
+- `updateUser()`: PUT /api/users/:id with `UserUpdateDTO`.
+- `deleteUser()`: DELETE /api/users/:id.
+- 类型导出: `UserInfo`, `UserCreateDTO`, `UserUpdateDTO`。
 
 ### Axios + Request Utility
-- Single Axios instance in `src/utils/request.ts` with baseURL, timeout, interceptors.
-- Request interceptor: adds auth headers if needed.
-- Response interceptor: unwraps `R<T>` envelope — returns `response.data` (the `R` object), handles global error display via `message.error()`.
-- Stores call `request.get/post/put/delete` and read `res.data.data` for payload, `res.data.total` for pagination total.
-- NEVER access `res.data.data.data` — the interceptor already unwraps one level.
+- Single Axios instance in `src/utils/request.ts` with `baseURL: '/api'`, `timeout: 30000`.
+- Request interceptor: reads `localStorage.getItem('token')`, attaches `Authorization: Bearer {token}`.
+- Response interceptor: 检查 `body.code >= 400` 时显示错误消息 (`NMessage.error()`) 并 reject; 401 时清理 token 并跳转登录。
+- Stores call `request.get/post/put/delete` and read `res.data.data` for payload, `res.data.total || 0` for pagination total.
+- NEVER access `res.data.data.data` — the interceptor already returns the R envelope.
+- Component catch blocks: `console.warn('Operation failed:', e)` + comment `// handled by interceptor`.
 
 ### Routing
 - Hash mode (`createWebHashHistory`) — no server config needed.
-- Parent routes with `BaseLayout` component: `/datasource` and `/interface` have children.
-- `BaseLayout.vue` contains `<NLayout>` + `<NLayoutContent>` + `<router-view>`.
-- Route definitions in `router/index.ts` with lazy imports: `() => import('@/views/...')`.
+- Auth guard in `router.beforeEach`:
+  - `/login` → public (no auth check).
+  - `!isAuthenticated` → redirect to `/login`.
+  - token exists but `currentUser` is null → call `fetchMe()` first.
+  - `meta.requiresAdmin` + `!isAdmin` → redirect to `/datasource`.
+- Parent-child routes: `/datasource`, `/interface`, `/user` are parent routes using `BaseLayout.vue`, with children for sub-pages.
+- Route definitions with lazy imports: `component: () => import('@/views/...')`.
+- 404 catch-all route `/:pathMatch(.*)*` → `NotFound.vue`.
 
 ### Type Safety
 - NO `as any` — use proper types or `unknown` with type guards.
 - NO `@ts-ignore` — fix the type error instead.
-- Define interfaces for API responses: `R<T>`, paginated list responses, entity types.
+- Define interfaces for API responses, paginated list responses, entity types.
 - Store state interfaces match backend DTOs/Entities.
 
 ### Error Handling
@@ -59,12 +97,17 @@ Vue 3 + Vite 8 + TypeScript 6 + Naive UI 2.44 + Pinia + Vue Router (hash mode).
 - Component catch blocks: add `console.warn('描述:', e)` before `// handled by interceptor` comment.
 - Never leave empty catch blocks without at least a warning log.
 - Typed errors: backend throws specific exceptions mapped to HTTP codes.
+- Delete operations: `deletingId` ref pattern + `loading: deletingId === row.id` + `finally { deletingId = null }`.
+- Global Vue errors: `app.config.errorHandler` in `main.ts`.
 
 ### Pagination
 - Frontend stores use `res.data.total || 0` for total count.
 - NEVER fall back to `res.data.pageSize` — the backend `R.ok(list, pageInfo)` sets `total` correctly.
 - PageHelper on backend returns `PageInfo` with correct `total`.
-- NDataTable pagination prop is a **plain JS object** — Vue template kebab-to-camel conversion does NOT apply. Always use `'onUpdate:pageSize': (size) => { ... }` (quoted), NOT `onUpdatePageSize`.
+- NDataTable pagination prop is a **plain JS object** — Vue template kebab-to-camel conversion does NOT apply:
+  - ✅ `'onUpdate:pageSize': (size: number) => { ... }` (quoted)
+  - ✅ `'onUpdate:page': (page: number) => { ... }` (quoted)
+  - ❌ `onUpdatePageSize` / `onUpdate:pageSize` (unquoted) — will NOT work
 
 ## TESTING SCOPE
 
@@ -76,14 +119,15 @@ Vue 3 + Vite 8 + TypeScript 6 + Naive UI 2.44 + Pinia + Vue Router (hash mode).
 |----|---------|------|------|
 | **Store** | 纯逻辑单元测试 | Vitest + `vi.mock('@/utils/request')` | `src/stores/__tests__/*.spec.ts` |
 | **Util** | 纯逻辑单元测试 | Vitest | `src/utils/__tests__/*.spec.ts` |
-| **Component (.vue)** | 组件挂载测试 | Vitest + `@vue/test-utils` | `src/components/__tests__/*.spec.ts` |
+| **Component (.vue)** | 组件挂载测试 | Vitest + `@vue/test-utils` | `src/views/*/__tests__/*.spec.ts` |
 | **View** | 暂不要求 | — | — |
-| **Router guard** | 纯逻辑单元测试 | Vitest + `vue-router` mock | `src/router/__tests__/*.spec.ts` |
+| **Router / Guard** | 纯逻辑单元测试 | Vitest + `vue-router` mock | `src/router/__tests__/*.spec.ts` |
 
 ### 测试配置
 
 - 测试框架：Vitest v4.x（已配置于 `vitest.config.ts`）
 - 测试环境：`jsdom`（DOM API 模拟）
+- 覆盖率：V8 provider，`text` + `json` + `html` reporter
 - 路径别名：`@` → `src/`（与 `vite.config.ts` 一致）
 - 运行命令：`npm run test:run`（CI 模式）或 `npm test`（watch 模式）
 
@@ -120,7 +164,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 - 覆盖正常响应（`code < 400`）、业务错误（`code >= 400`）、网络错误三种场景
 - Util 函数测试覆盖正常输入、边界值、异常输入
 
-### Component 测试规范（将来需补充时）
+### Component 测试规范
 
 - 使用 `mount()` 或 `shallowMount()` 挂载组件
 - 验证：组件渲染正确、props 响应、emit 事件触发
@@ -161,7 +205,9 @@ cd frontend && npm run test:run
 - Do NOT put business logic in components — use stores.
 - Do NOT mutate props — use `defineProps` with proper types.
 - Do NOT use `v-model` on non-form elements without proper modifiers.
-- Do NOT import Naive UI components globally in every file — import what you need (tree-shaking).
+- Do NOT import Naive UI globally in every file — import what each file needs (tree-shaking).
+- Do NOT import Naive UI `as any` globals — use per-component imports + `create()` API.
+- Do NOT use `onUpdatePageSize` in NDataTable pagination JS object — use `'onUpdate:pageSize': (size) => {}` (quoted).
 
 ## COMMANDS
 
@@ -170,11 +216,16 @@ cd frontend
 npm run dev           # Vite dev server (default :5173)
 npm run build         # Type-check + production build
 npm run type-check    # vue-tsc only (no build)
+npm run test:run      # Vitest (CI mode)
+npm test              # Vitest (watch mode)
 ```
 
 ## NOTES
 
 - TypeScript 6 with `node24` target.
-- `@` alias maps to `src/` (configured in `vite.config.ts`).
-- Naive UI 2.44 is a large library — production chunk ~1.3 MB raw. Code-split imports for real components (await import).
-- No testing framework installed yet — Vitest is recommended when adding tests.
+- `@` alias maps to `src/` (configured in `vite.config.ts` and `vitest.config.ts`).
+- Naive UI 2.44 is a large library — production build chunk was ~309 kB after tree-shaking (from ~711 kB raw).
+- Vitest v4.x is configured with `jsdom` environment and `@vue/test-utils` v2.
+- Frontend dev server proxies `/api` to backend at `localhost:8080` via `vite.config.ts`.
+- There is no top-level `src/components/` directory — reusable view-specific components live under `src/views/*/components/`.
+- `createDiscreteApi` from naive-ui is used in `request.ts` for message/notification without component context.

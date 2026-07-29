@@ -229,7 +229,8 @@ public class ApiInterfaceService implements DataSourceEventPublisher {
                     "Invalid status transition from " + currentStatus + " to " + newStatus);
         }
 
-        mapper.updateStatus(id, newStatus);
+        iface.setStatus(newStatus);
+        mapper.updateById(iface);
     }
 
     @Override

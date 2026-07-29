@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,6 +52,13 @@ public class GlobalExceptionHandler {
     public R<Void> handleConflict(IllegalStateException ex) {
         logger.error("Conflict: {}", ex.getMessage(), ex);
         return R.error(409, ex.getMessage());
+    }
+
+    @ExceptionHandler(AuthorizationDeniedException.class)
+    public ResponseEntity<R<Void>> handleAccessDenied(AuthorizationDeniedException ex) {
+        logger.warn("Access denied: {}", ex.getMessage(), ex);
+        R<Void> body = R.error(403, "Access denied");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     @ExceptionHandler(Exception.class)

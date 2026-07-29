@@ -50,3 +50,40 @@ CREATE TABLE IF NOT EXISTS interface_param (
     INDEX idx_interface_id (interface_id),
     CONSTRAINT fk_param_interface FOREIGN KEY (interface_id) REFERENCES api_interface(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- Audit fields (migration)
+-- ============================================================
+
+ALTER TABLE data_source
+    ADD COLUMN created_by VARCHAR(100) AFTER status,
+    ADD COLUMN last_modified_by VARCHAR(100) AFTER created_at;
+
+ALTER TABLE api_interface
+    ADD COLUMN created_by VARCHAR(100) AFTER status,
+    ADD COLUMN last_modified_by VARCHAR(100) AFTER created_at;
+
+ALTER TABLE interface_param
+    ADD COLUMN created_by VARCHAR(100),
+    ADD COLUMN last_modified_by VARCHAR(100),
+    ADD COLUMN updated_at DATETIME;
+
+-- ============================================================
+-- System user table
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS sys_user (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100),
+    role VARCHAR(20) NOT NULL DEFAULT 'USER',
+    status VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+    created_by VARCHAR(100),
+    created_at DATETIME,
+    last_modified_by VARCHAR(100),
+    last_modified_at DATETIME,
+    UNIQUE KEY uk_username (username),
+    INDEX idx_username (username),
+    INDEX idx_role (role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

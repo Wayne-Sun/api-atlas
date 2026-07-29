@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
+import { useAuthStore } from '@/stores/auth'
 
 const themeOverrides: GlobalThemeOverrides = {
   common: {
@@ -10,6 +12,11 @@ const themeOverrides: GlobalThemeOverrides = {
     primaryColorSuppl: '#3B82F6'
   }
 }
+
+onMounted(() => {
+  const authStore = useAuthStore()
+  authStore.initFromStorage()
+})
 </script>
 
 <template>

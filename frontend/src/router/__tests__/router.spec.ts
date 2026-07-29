@@ -1,15 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
 import router from '@/router/index.ts'
 
 describe('router configuration', () => {
   beforeEach(() => {
-    router.push('/')
+    setActivePinia(createPinia())
   })
 
   describe('route definitions', () => {
-    it('has 4 top-level routes', () => {
+    it('has 6 top-level routes', () => {
       const rawRoutes = router.options.routes
-      expect(rawRoutes.length).toBe(4)
+      expect(rawRoutes.length).toBe(6)
     })
 
     it('root path redirects to /datasource', () => {
@@ -68,6 +69,28 @@ describe('router configuration', () => {
     })
   })
 
+  describe('login route', () => {
+    it('Login is at /login', () => {
+      const resolved = router.resolve({ name: 'Login' })
+      expect(resolved.name).toBe('Login')
+      expect(resolved.path).toBe('/login')
+    })
+  })
+
+  describe('user route', () => {
+    it('UserList is at /user', () => {
+      const resolved = router.resolve({ name: 'UserList' })
+      expect(resolved.name).toBe('UserList')
+      expect(resolved.path).toBe('/user')
+    })
+
+    it('requiresAuth and requiresAdmin meta tags', () => {
+      const rawRoutes = router.options.routes
+      const userRoute = rawRoutes.find((r) => r.path === '/user')!
+      expect(userRoute.meta).toEqual({ requiresAuth: true, requiresAdmin: true })
+    })
+  })
+
   describe('404 catch-all route', () => {
     it('matches unmatched paths', () => {
       const resolved = router.resolve('/some/random/path')
@@ -116,6 +139,16 @@ describe('router configuration', () => {
       expect(typeof interfaceRoute.component).toBe('function')
 
       for (const child of interfaceRoute.children!) {
+        expect(typeof child.component).toBe('function')
+      }
+    })
+
+    it('user child components are lazy-loaded', () => {
+      const rawRoutes = router.options.routes
+      const userRoute = rawRoutes.find((r) => r.path === '/user')!
+      expect(typeof userRoute.component).toBe('function')
+
+      for (const child of userRoute.children!) {
         expect(typeof child.component).toBe('function')
       }
     })
