@@ -244,6 +244,16 @@ mvn test -Dspring.profiles.active=test
 # 应看到 BUILD SUCCESS，Tests run > 0，Failures: 0，Errors: 0
 ```
 
+### 测试后清理
+
+每次功能测试验证完成后，必须检查项目中是否有残留的测试过程文件（如：孤立的 .class 文件、临时数据文件、手工放置的依赖类等），并**向用户确认是否删除**后再执行清理。
+
+| 检查项 | 示例 |
+|--------|------|
+| 项目根目录下非标准构建产物 | `backend/org/` 下的 .class 文件 |
+| 构建配置未引用的额外目录 | `src/` / `target/` 外的编译产物 |
+| 手动提取的依赖类 | 标准 Maven 依赖本应自动解析的类 |
+
 ## ANTI-PATTERNS
 
 - Do NOT use `synchronized(String.intern())` — use `ConcurrentHashMap.computeIfAbsent()` with explicit lock objects.
