@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDatasourceStore } from '@/stores/datasource'
 import { NForm, NFormItem, NInput, NInputNumber, NSelect, NButton, NSpace, NCard, useMessage } from 'naive-ui'
@@ -15,7 +15,8 @@ const testLoading = ref(false)
 const typeOptions: { label: string; value: string }[] = [
   { label: 'MySQL', value: 'MySQL' },
   { label: 'PostgreSQL', value: 'PostgreSQL' },
-  { label: 'Elasticsearch', value: 'Elasticsearch' }
+  { label: 'Elasticsearch', value: 'Elasticsearch' },
+  { label: 'MongoDB', value: 'MongoDB' }
 ]
 
 const formRef = ref()
@@ -31,6 +32,14 @@ const form = ref({
 })
 
 const isElasticsearch = computed(() => form.value.type === 'Elasticsearch')
+
+// Only flip the default MySQL port (3306) when switching to MongoDB — never clobber a user-customized port
+watch(
+  () => form.value.type,
+  (t) => {
+    if (t === 'MongoDB' && form.value.port === 3306) form.value.port = 27017
+  }
+)
 
 const rules = {
   name: [{ required: true, message: '请输入名称' }],

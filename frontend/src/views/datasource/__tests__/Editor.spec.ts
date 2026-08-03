@@ -64,11 +64,20 @@ const stubs = {
     },
   },
   NInputNumber: {
-    setup() {
-      return () => h('input', { type: 'number' })
+    name: 'NInputNumber',
+    props: ['value'],
+    setup(props: any, { emit }: any) {
+      return () =>
+        h('input', {
+          type: 'number',
+          value: props.value,
+          onInput: (e: Event) => emit('update:value', Number((e.target as HTMLInputElement).value)),
+        })
     },
   },
   NSelect: {
+    name: 'NSelect',
+    props: ['options', 'value'],
     setup() {
       return () => h('select')
     },
@@ -175,6 +184,66 @@ describe('Editor.vue', () => {
     await cancelButton.trigger('click')
 
     expect(mockPush).toHaveBeenCalledWith('/datasource')
+    wrapper.unmount()
+  })
+
+  it('type dropdown options include MongoDB', () => {
+    const wrapper = createWrapper()
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    const options = select.props('options') as { label: string; value: string }[]
+    expect(options).toEqual(
+      expect.arrayContaining([{ label: 'MongoDB', value: 'MongoDB' }])
+    )
+    wrapper.unmount()
+  })
+
+  it('selecting MongoDB with default port 3306 switches port to 27017', async () => {
+    const wrapper = createWrapper()
+
+    // form.port starts at the default 3306
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3306)
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    select.vm.$emit('update:value', 'MongoDB')
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(27017)
+    wrapper.unmount()
+  })
+
+  it('selecting MongoDB keeps a non-default port unchanged', async () => {
+    const wrapper = createWrapper()
+
+    // User customized the port to 3307 first
+    const numberInput = wrapper.find('input[type="number"]')
+    await numberInput.setValue('3307')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3307)
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    select.vm.$emit('update:value', 'MongoDB')
+    await flushPromises()
+
+    // 3307 !== 3306, so the watcher must NOT clobber it
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3307)
+    wrapper.unmount()
+  })
+
+  it('MongoDB type shows databaseName/username/password but not apiKey', async () => {
+    const wrapper = createWrapper()
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    select.vm.$emit('update:value', 'MongoDB')
+    await flushPromises()
+
+    // name, host, databaseName, username, password = 5 text inputs; apiKey must NOT render
+    const textInputs = wrapper.findAll('input:not([type="number"])')
+    expect(textInputs.length).toBe(5)
+
+    // Still exactly 1 number input (port) and 1 select (type)
+    expect(wrapper.findAll('input[type="number"]').length).toBe(1)
+    expect(wrapper.findAll('select').length).toBe(1)
     wrapper.unmount()
   })
 })

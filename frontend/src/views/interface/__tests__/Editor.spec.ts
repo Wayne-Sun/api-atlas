@@ -14,6 +14,9 @@ const mockInterfaceCreate = vi.fn().mockResolvedValue({})
 const mockInterfaceUpdate = vi.fn().mockResolvedValue({})
 const mockInterfaceGetById = vi.fn().mockResolvedValue(undefined)
 
+// Mutable datasource list so tests can inject MongoDB datasources
+let mockDatasourceList: Array<Record<string, unknown>> = []
+
 // ── Mock naive-ui ────────────────────────────────────────────────
 vi.mock('naive-ui', () => ({
   NForm: {
@@ -56,13 +59,10 @@ vi.mock('@/stores/interface', () => ({
 
 vi.mock('@/stores/datasource', () => ({
   useDatasourceStore: vi.fn(() => ({
-    list: [
-      { id: 1, name: 'MySQL Local', type: 'MySQL', host: 'localhost', port: 3306, status: 'active', createdAt: '', updatedAt: '' },
-      { id: 2, name: 'ES Prod', type: 'Elasticsearch', host: 'es.local', port: 9200, status: 'active', createdAt: '', updatedAt: '' },
-    ],
+    list: mockDatasourceList,
     loading: false,
     current: null,
-    total: 2,
+    total: 3,
     fetchList: mockFetchDatasourceList,
     create: vi.fn(),
     update: vi.fn(),
@@ -106,6 +106,11 @@ async function mountEditor(initialRoute = '/interface/create') {
 describe('Editor.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockDatasourceList = [
+      { id: 1, name: 'MySQL Local', type: 'MySQL', host: 'localhost', port: 3306, status: 'active', createdAt: '', updatedAt: '' },
+      { id: 2, name: 'ES Prod', type: 'Elasticsearch', host: 'es.local', port: 9200, status: 'active', createdAt: '', updatedAt: '' },
+      { id: 3, name: 'Mongo Prod', type: 'MongoDB', host: 'mongo.local', port: 27017, status: 'active', createdAt: '', updatedAt: '' },
+    ]
     mockFetchDatasourceList.mockResolvedValue(undefined)
     mockInterfaceGetById.mockResolvedValue(undefined)
     mockInterfaceCreate.mockResolvedValue({})
@@ -220,5 +225,71 @@ describe('Editor.vue', () => {
   it('shows placeholder text when params list is empty', async () => {
     const { wrapper } = await mountEditor()
     expect(wrapper.html()).toContain('自动生成参数')
+  })
+
+  it('MongoDB datasource - queryTypeOptions returns Find/Aggregation', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { dataSourceId: number | null }
+      queryTypeOptions: Array<{ label: string; value: string }>
+    }
+
+    vm.form.dataSourceId = 3
+    await nextTick()
+    await nextTick()
+
+    expect(vm.queryTypeOptions).toEqual([
+      { label: 'Find', value: 'MONGO_FIND' },
+      { label: 'Aggregation', value: 'MONGO_AGG' }
+    ])
+  })
+
+  it('queryType=MONGO_FIND - datasourceOptions only includes MongoDB datasources', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { queryType: string }
+      datasourceOptions: Array<{ label: string; value: number }>
+    }
+
+    vm.form.queryType = 'MONGO_FIND'
+    await nextTick()
+    await nextTick()
+
+    expect(vm.datasourceOptions).toEqual([
+      { label: 'Mongo Prod (MongoDB)', value: 3 }
+    ])
+  })
+
+  it('datasource switched to MongoDB - queryType auto-becomes MONGO_FIND', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { dataSourceId: number | null; queryType: string }
+    }
+
+    expect(vm.form.queryType).toBe('SQL')
+
+    vm.form.dataSourceId = 3
+    await nextTick()
+    await nextTick()
+
+    expect(vm.form.queryType).toBe('MONGO_FIND')
+  })
+
+  it('queryType switched to SQL while datasource is MongoDB - dataSourceId cleared', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { dataSourceId: number | null; queryType: string }
+    }
+
+    vm.form.dataSourceId = 3
+    await nextTick()
+    await nextTick()
+    expect(vm.form.queryType).toBe('MONGO_FIND')
+
+    vm.form.queryType = 'SQL'
+    await nextTick()
+    await nextTick()
+
+    expect(vm.form.dataSourceId).toBeNull()
   })
 })

@@ -73,6 +73,9 @@ const datasourceOptions = computed(() => {
       if (form.value.queryType === 'ESQL' || form.value.queryType === 'QUERY_DSL') {
         return ds.type === 'Elasticsearch'
       }
+      if (form.value.queryType === 'MONGO_FIND' || form.value.queryType === 'MONGO_AGG') {
+        return ds.type === 'MongoDB'
+      }
       return ds.type === 'MySQL' || ds.type === 'PostgreSQL'
     })
     .map(ds => ({ label: `${ds.name} (${ds.type})`, value: ds.id }))
@@ -85,6 +88,12 @@ const queryTypeOptions = computed(() => {
     return [
       { label: 'ES|QL', value: 'ESQL' },
       { label: 'Query DSL', value: 'QUERY_DSL' }
+    ]
+  }
+  if (selectedDs?.type === 'MongoDB') {
+    return [
+      { label: 'Find', value: 'MONGO_FIND' },
+      { label: 'Aggregation', value: 'MONGO_AGG' }
     ]
   }
   return [
@@ -124,6 +133,10 @@ watch(() => form.value.dataSourceId, (newId) => {
     if (form.value.queryType !== 'ESQL' && form.value.queryType !== 'QUERY_DSL') {
       form.value.queryType = 'ESQL'
     }
+  } else if (ds?.type === 'MongoDB') {
+    if (form.value.queryType !== 'MONGO_FIND' && form.value.queryType !== 'MONGO_AGG') {
+      form.value.queryType = 'MONGO_FIND'
+    }
   } else if (ds?.type === 'MySQL' || ds?.type === 'PostgreSQL') {
     if (form.value.queryType === 'ESQL' || form.value.queryType === 'QUERY_DSL') {
       form.value.queryType = 'SQL'
@@ -138,9 +151,14 @@ watch(() => form.value.queryType, (newType) => {
     if (ds && ds.type !== 'Elasticsearch') {
       form.value.dataSourceId = null
     }
+  } else if (newType === 'MONGO_FIND' || newType === 'MONGO_AGG') {
+    const ds = datasourceStore.list.find(d => d.id === form.value.dataSourceId)
+    if (ds && ds.type !== 'MongoDB') {
+      form.value.dataSourceId = null
+    }
   } else if (newType === 'SQL' || newType === 'IBATIS') {
     const ds = datasourceStore.list.find(d => d.id === form.value.dataSourceId)
-    if (ds && ds.type === 'Elasticsearch') {
+    if (ds && (ds.type === 'Elasticsearch' || ds.type === 'MongoDB')) {
       form.value.dataSourceId = null
     }
   }

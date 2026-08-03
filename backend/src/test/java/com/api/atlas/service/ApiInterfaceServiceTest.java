@@ -9,6 +9,7 @@ import com.api.atlas.model.InterfaceParam;
 import com.api.atlas.model.ParamDef;
 import com.api.atlas.service.executor.DatabaseQueryExecutor;
 import com.api.atlas.service.executor.ElasticsearchQueryExecutor;
+import com.api.atlas.service.executor.MongoQueryExecutor;
 import com.api.atlas.service.executor.QueryResult;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -49,6 +50,9 @@ class ApiInterfaceServiceTest {
 
     @Mock
     private ElasticsearchQueryExecutor esQueryExecutor;
+
+    @Mock
+    private MongoQueryExecutor mongoQueryExecutor;
 
     @InjectMocks
     private ApiInterfaceService service;
@@ -436,6 +440,57 @@ class ApiInterfaceServiceTest {
         assertThatThrownBy(() -> service.testInterface(999L, Map.of(), 1, 10))
                 .isInstanceOf(NoSuchElementException.class)
                 .hasMessageContaining("999");
+    }
+
+    @Test
+    @DisplayName("测试接口 - MONGO_FIND 查询委托给 MongoQueryExecutor")
+    void testInterface_MongoFindQuery_DelegatesToMongoExecutor() {
+        // Arrange
+        ApiInterface iface = new ApiInterface();
+        iface.setId(5L);
+        iface.setStatus("PENDING_TEST");
+        iface.setDataSourceId(30L);
+        iface.setQueryType("MONGO_FIND");
+        iface.setQueryContent("{\"collection\":\"users\",\"filter\":{\"status\":\"${status}\"}}");
+        when(mapper.selectById(5L)).thenReturn(iface);
+
+        QueryResult expected = new QueryResult();
+        when(mongoQueryExecutor.executeFind(30L, iface.getQueryContent(),
+                Map.of("status", "active"), 1, 10)).thenReturn(expected);
+
+        // Act
+        QueryResult result = service.testInterface(5L, Map.of("status", "active"), 1, 10);
+
+        // Assert
+        assertThat(result).isSameAs(expected);
+        verify(mongoQueryExecutor).executeFind(30L, iface.getQueryContent(),
+                Map.of("status", "active"), 1, 10);
+    }
+
+    @Test
+    @DisplayName("测试接口 - MONGO_AGG 查询委托给 MongoQueryExecutor")
+    void testInterface_MongoAggQuery_DelegatesToMongoExecutor() {
+        // Arrange
+        ApiInterface iface = new ApiInterface();
+        iface.setId(6L);
+        iface.setStatus("ONLINE");
+        iface.setDataSourceId(30L);
+        iface.setQueryType("MONGO_AGG");
+        iface.setQueryContent(
+                "{\"collection\":\"orders\",\"pipeline\":[{\"$match\":{\"amount\":{\"$gte\":${min}}}}]}");
+        when(mapper.selectById(6L)).thenReturn(iface);
+
+        QueryResult expected = new QueryResult();
+        when(mongoQueryExecutor.executeAggregate(30L, iface.getQueryContent(),
+                Map.of("min", 100), 1, 20)).thenReturn(expected);
+
+        // Act
+        QueryResult result = service.testInterface(6L, Map.of("min", 100), 1, 20);
+
+        // Assert
+        assertThat(result).isSameAs(expected);
+        verify(mongoQueryExecutor).executeAggregate(30L, iface.getQueryContent(),
+                Map.of("min", 100), 1, 20);
     }
 
     @Test

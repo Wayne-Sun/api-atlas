@@ -10,6 +10,7 @@ API 接口管理与查询平台 —— 统一管理多数据源、动态查询�
 | ORM | MyBatis 4.0.1, PageHelper 4.1.1 |
 | Database | MySQL (primary), H2 (test), PostgreSQL (optional) |
 | Search | Elasticsearch 8.16 (ES\|QL + Query DSL) |
+| NoSQL | MongoDB (mongodb-driver-sync 5.8.0, MONGO_FIND + MONGO_AGG) |
 | Cache / Auth | Redis (token session store, degradable) |
 | Security | Spring Security + OAuth2 Resource Server, RSA256 JWT |
 | Frontend | Vue 3.5, Vite 8, TypeScript 6 |
@@ -19,13 +20,15 @@ API 接口管理与查询平台 —— 统一管理多数据源、动态查询�
 
 ## Features
 
-- **Multi-Datasource Management** — JDBC (MySQL, PostgreSQL) + Elasticsearch client lifecycle, extensible factory registry
-- **Dynamic Interface CRUD** — Create API interfaces with 4 query engine types
+- **Multi-Datasource Management** — JDBC (MySQL, PostgreSQL) + Elasticsearch + MongoDB client lifecycle, extensible factory registry
+- **Dynamic Interface CRUD** — Create API interfaces with 6 query engine types
 - **Query Engines**
   - **SQL** — JdbcTemplate with `PreparedStatement` parameter binding
   - **IBATIS** — MyBatis XMLBuilder dynamic SQL, in-memory pagination with safety limits
   - **ES\|QL** — Elasticsearch query language with parameter substitution
   - **Query DSL** — Full Elasticsearch JSON query with `index` field stripping
+  - **MONGO_FIND** — MongoDB `find` queries (filter/projection/sort) with typed `${param}` substitution and `$skip`/`$limit` pagination
+  - **MONGO_AGG** — MongoDB aggregation pipelines with appended `$skip`/`$limit` pagination and `$count` totals (`$out`/`$merge` write stages rejected)
 - **Query Testing** — In-browser query execution with parameter input and result display
 - **Auth & RBAC** — RSA256 JWT, token revocation via Redis, admin-only user management
 - **Audit Logging** — MyBatis interceptor auto-fills `createdBy`/`updatedAt` etc.
@@ -145,6 +148,7 @@ cd frontend && npm test             # Run tests (watch)
 | `atlas.jwt.private-key` | `CHANGE_ME_*` | RSA private key (PEM) |
 | `atlas.jwt.public-key` | `CHANGE_ME_*` | RSA public key (PEM) |
 | `atlas.executor.ibatis.max-memory-rows` | `100000` | IBATIS in-memory pagination limit |
+| `atlas.mongodb.*` | `5000 / 5000 / 60000` | MongoDB client timeouts (connect / server-selection / socket, ms) |
 
 ### `application-local.yml` (gitignored)
 

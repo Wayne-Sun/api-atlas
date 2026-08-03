@@ -9,6 +9,8 @@ import com.api.atlas.service.DataSourceService;
 import com.github.pagehelper.PageInfo;
 import com.zaxxer.hikari.HikariDataSource;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.mongodb.client.MongoClient;
+import org.bson.Document;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -165,6 +167,17 @@ public class DataSourceController {
                     client.cluster().health();
                 } finally {
                     client._transport().close();
+                }
+            } else if ("MongoDB".equals(req.getType())) {
+                MongoClient client = (MongoClient) factoryRegistry.getFactory("MongoDB")
+                        .createClient(req.getHost(), req.getPort(), req.getDatabaseName(),
+                                req.getUsername(), req.getPassword(), req.getApiKey());
+                try {
+                    client.getDatabase(req.getDatabaseName() != null && !req.getDatabaseName().isBlank()
+                                    ? req.getDatabaseName() : "admin")
+                            .runCommand(new Document("ping", 1));
+                } finally {
+                    client.close();
                 }
             } else {
                 javax.sql.DataSource ds = (javax.sql.DataSource) factoryRegistry.getFactory(req.getType())

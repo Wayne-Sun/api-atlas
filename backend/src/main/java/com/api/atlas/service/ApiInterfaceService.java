@@ -9,6 +9,7 @@ import com.api.atlas.model.InterfaceParam;
 import com.api.atlas.model.ParamDef;
 import com.api.atlas.service.executor.DatabaseQueryExecutor;
 import com.api.atlas.service.executor.ElasticsearchQueryExecutor;
+import com.api.atlas.service.executor.MongoQueryExecutor;
 import com.api.atlas.service.executor.QueryResult;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
@@ -29,16 +30,19 @@ public class ApiInterfaceService implements DataSourceEventPublisher {
     private final ParamExtractor paramExtractor;
     private final DatabaseQueryExecutor databaseQueryExecutor;
     private final ElasticsearchQueryExecutor esQueryExecutor;
+    private final MongoQueryExecutor mongoQueryExecutor;
 
     public ApiInterfaceService(ApiInterfaceMapper mapper, InterfaceParamMapper paramMapper,
                                ParamExtractor paramExtractor,
                                DatabaseQueryExecutor databaseQueryExecutor,
-                               ElasticsearchQueryExecutor esQueryExecutor) {
+                               ElasticsearchQueryExecutor esQueryExecutor,
+                               MongoQueryExecutor mongoQueryExecutor) {
         this.mapper = mapper;
         this.paramMapper = paramMapper;
         this.paramExtractor = paramExtractor;
         this.databaseQueryExecutor = databaseQueryExecutor;
         this.esQueryExecutor = esQueryExecutor;
+        this.mongoQueryExecutor = mongoQueryExecutor;
     }
 
     @Transactional
@@ -197,6 +201,10 @@ public class ApiInterfaceService implements DataSourceEventPublisher {
                 return esQueryExecutor.executeEsql(dsId, queryContent, params, pageNum, pageSize);
             case "QUERY_DSL":
                 return esQueryExecutor.executeQueryDsl(dsId, queryContent, params, pageNum, pageSize);
+            case "MONGO_FIND":
+                return mongoQueryExecutor.executeFind(dsId, queryContent, params, pageNum, pageSize);
+            case "MONGO_AGG":
+                return mongoQueryExecutor.executeAggregate(dsId, queryContent, params, pageNum, pageSize);
             default:
                 throw new IllegalArgumentException("Unsupported query type: " + queryType);
         }

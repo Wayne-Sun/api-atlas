@@ -6,6 +6,8 @@ import com.api.atlas.mapper.DataSourceMapper;
 import com.api.atlas.model.DataSource;
 import com.api.atlas.service.executor.DatabaseQueryExecutor;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoDatabase;
 import com.zaxxer.hikari.HikariDataSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -23,6 +25,7 @@ public class DataSourceClientManager {
 
     private final Map<String, javax.sql.DataSource> dataSourceMap = new ConcurrentHashMap<>();
     private final Map<String, ElasticsearchClient> esClientMap = new ConcurrentHashMap<>();
+    private final Map<String, MongoClient> mongoClientMap = new ConcurrentHashMap<>();
     private final DataSourceFactoryRegistry factoryRegistry;
     private final DataSourceMapper dataSourceMapper;
     private final SecretKey secretKey;
@@ -59,7 +62,9 @@ public class DataSourceClientManager {
 
         Object lock = lockMap.computeIfAbsent(datasourceId, k -> new Object());
         synchronized (lock) {
-            if (dataSourceMap.containsKey(datasourceId)) {
+            if (dataSourceMap.containsKey(datasourceId)
+                    || esClientMap.containsKey(datasourceId)
+                    || mongoClientMap.containsKey(datasourceId)) {
                 return;
             }
 
@@ -72,6 +77,8 @@ public class DataSourceClientManager {
                                     ds.getUsername(), plainPassword, ds.getApiKey());
                     esClientMap.put(datasourceId, client);
                     applicationContext.getBeanFactory().registerSingleton(datasourceId, client);
+                } else if ("MongoDB".equals(ds.getType())) {
+                    createMongoClient(ds, datasourceId);
                 } else {
                     javax.sql.DataSource client = (javax.sql.DataSource) factoryRegistry.getFactory(ds.getType())
                             .createClient(ds.getHost(), ds.getPort(),
@@ -113,6 +120,15 @@ public class DataSourceClientManager {
                     // ignore close errors
                 }
             }
+
+            MongoClient mongo = mongoClientMap.remove(datasourceId);
+            if (mongo != null) {
+                try {
+                    mongo.close();
+                } catch (Exception ignored) {
+                    // ignore close errors
+                }
+            }
         }
     }
 
@@ -134,6 +150,62 @@ public class DataSourceClientManager {
         ElasticsearchClient client = esClientMap.get("datasource_" + id);
         if (client == null) {
             throw new IllegalArgumentException("DataSource not enabled: " + id);
+        }
+        return client;
+    }
+
+    /**
+     * Get MongoClient by ID, creating it lazily on first access.
+     *
+     * <p>Unlike the ES/JDBC clients (created eagerly on {@link #enableDataSource}),
+     * MongoDB clients are created on demand and cached. This matches the PRD's
+     * "pool lazy initialization" principle: a MongoDB datasource only connects
+     * when it is first actually used.</p>
+     */
+    public MongoClient getMongoClient(Long id) {
+        String datasourceId = "datasource_" + id;
+        MongoClient cached = mongoClientMap.get(datasourceId);
+        if (cached != null) {
+            return cached;
+        }
+        Object lock = lockMap.computeIfAbsent(datasourceId, k -> new Object());
+        synchronized (lock) {
+            MongoClient again = mongoClientMap.get(datasourceId);
+            if (again != null) {
+                return again;
+            }
+            DataSource ds = dataSourceMapper.selectById(id);
+            if (ds == null || !"ENABLED".equals(ds.getStatus())) {
+                throw new IllegalArgumentException("DataSource not enabled: " + id);
+            }
+            try {
+                return createMongoClient(ds, datasourceId);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create MongoDB client: " + id, e);
+            }
+        }
+    }
+
+    /**
+     * Get the MongoDatabase to query for a datasource, defaulting to "admin"
+     * when no database name is configured.
+     */
+    public MongoDatabase getMongoDatabase(Long id) {
+        DataSource ds = dataSourceMapper.selectById(id);
+        if (ds == null || !"ENABLED".equals(ds.getStatus())) {
+            throw new IllegalArgumentException("DataSource not enabled: " + id);
+        }
+        String dbName = ds.getDatabaseName();
+        return getMongoClient(id).getDatabase(dbName != null && !dbName.isBlank() ? dbName : "admin");
+    }
+
+    private MongoClient createMongoClient(DataSource ds, String datasourceId) throws Exception {
+        MongoClient client = (MongoClient) factoryRegistry.getFactory("MongoDB")
+                .createClient(ds.getHost(), ds.getPort(), ds.getDatabaseName(),
+                        ds.getUsername(), decrypt(ds.getPassword()), ds.getApiKey());
+        mongoClientMap.put(datasourceId, client);
+        if (!applicationContext.containsBean(datasourceId)) {
+            applicationContext.getBeanFactory().registerSingleton(datasourceId, client);
         }
         return client;
     }

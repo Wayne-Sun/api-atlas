@@ -43,6 +43,10 @@ atlas:
     secret-key: CHANGE_ME_PLEASE_REPLACE_WITH_BASE64_32_BYTE_KEY
   elasticsearch:
     protocol: http
+  mongodb:
+    connect-timeout-ms: 5000
+    server-selection-timeout-ms: 5000
+    socket-timeout-ms: 60000
   datasource:
     hikari:
       maximum-pool-size: 5

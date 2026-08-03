@@ -19,6 +19,7 @@ API Atlas is a low-code API gateway that enables developers to expose SQL querie
 | MySQL | `com.mysql.cj.jdbc.Driver` | HikariCP | `jdbc:mysql://{host}:{port}/{database}` |
 | PostgreSQL | `org.postgresql.Driver` | HikariCP | `jdbc:postgresql://{host}:{port}/{database}` |
 | Elasticsearch | `co.elastic.clients.transport.RestClientTransport` | Apache HttpClient 5 | `http://{host}:{port}` |
+| MongoDB | `com.mongodb.client.MongoClient` | Lazy driver connection (`MongoClients.create`, no pool) | `mongodb://{host}:{port}` or full `mongodb://` / `mongodb+srv://` string passthrough |
 
 The type registry follows an extensible pattern: adding a new data source type requires implementing a `DatasourceClientFactory` bean and registering it in the type-to-factory map. No changes to existing controllers or services are needed.
 
@@ -54,8 +55,10 @@ The type registry follows an extensible pattern: adding a new data source type r
 | `IBATIS` | MyBatis `SqlSession` | Dynamic XML fragment with `${param}` → MyBatis `#{}` / `${}` conversion | Complex queries requiring conditional logic, joins, or subqueries |
 | `ESQL` | Elasticsearch `EsClient` | Positional `?` placeholders in ES\|QL query strings | Aggregation and search queries against Elasticsearch |
 | `QUERY_DSL` | Elasticsearch `EsClient` | JSON tree-walk replacement of `"{{paramName}}"` placeholders in the DSL body | Full Elasticsearch Query DSL with complex nested structures |
+| `MONGO_FIND` | MongoDB driver `MongoCollection.find()` | Typed JSON tree-walk replacement of `${param}` (numbers/booleans/null → typed nodes, mixed text interpolated as string) | Read-only MongoDB find queries (filter/projection/sort) with `$skip`/`$limit` pagination and `countDocuments` total |
+| `MONGO_AGG` | MongoDB driver `MongoCollection.aggregate()` | Typed JSON tree-walk replacement of `${param}` | Aggregation pipelines with appended `$skip`/`$limit` pagination and `$count` total; write stages `$out`/`$merge` rejected |
 
-**SQL** queries accept `${paramName}` placeholders that are converted to JDBC `?` positional parameters before execution, ensuring PreparedStatement-level injection protection. **IBATIS** fragments are wrapped in a MyBatis `<select>` template and executed through `SqlSession.selectList()`. **ES|QL** uses positional `?` parameters via the Elasticsearch ES|QL client. **Query DSL** performs a JSON tree-walk replacement — every `"{{paramName}}"` string value in the parsed JSON tree is replaced with the supplied parameter value before sending to Elasticsearch.
+**SQL** queries accept `${paramName}` placeholders that are converted to JDBC `?` positional parameters before execution, ensuring PreparedStatement-level injection protection. **IBATIS** fragments are wrapped in a MyBatis `<select>` template and executed through `SqlSession.selectList()`. **ES|QL** uses positional `?` parameters via the Elasticsearch ES|QL client. **Query DSL** performs a JSON tree-walk replacement — every `"{{paramName}}"` string value in the parsed JSON tree is replaced with the supplied parameter value before sending to Elasticsearch. **MONGO_FIND** and **MONGO_AGG** run against the MongoDB driver: a JSON tree-walk replaces `${param}` with typed nodes (numbers, booleans, null), then `find()`/`aggregate()` executes read-only against the target collection, with pagination and total counts applied by the executor.
 
 ### 3.2 Status State Machine
 
@@ -135,7 +138,7 @@ The type registry follows an extensible pattern: adding a new data source type r
 | `url_slug` | `VARCHAR(100)` | `NOT NULL, UNIQUE` | Auto-generated from english_name |
 | `method` | `VARCHAR(10)` | `NOT NULL, DEFAULT 'POST'` | HTTP method (`POST` or `GET`) |
 | `data_source_id` | `BIGINT` | `FK → data_source.id, NOT NULL` | Referenced data source |
-| `query_type` | `VARCHAR(20)` | `NOT NULL` | `SQL`, `IBATIS`, `ESQL`, or `QUERY_DSL` |
+| `query_type` | `VARCHAR(20)` | `NOT NULL` | `SQL`, `IBATIS`, `ESQL`, `QUERY_DSL`, `MONGO_FIND`, or `MONGO_AGG` |
 | `query_content` | `TEXT` | `NOT NULL` | Query template with `${param}` placeholders |
 | `is_paginated` | `TINYINT(1)` | `NOT NULL, DEFAULT 0` | Whether pagination is enabled |
 | `page_size` | `INT` | `DEFAULT 10` | Default page size (when paginated) |
@@ -251,9 +254,12 @@ The UI follows a Soybean Admin-inspired layout pattern:
 **Interface Editor (`/interface/create`, `/interface/edit/:id`):**
 - Three-section vertical form: General Config, Query Config, Parameter Config
 - General: English name, Chinese name, HTTP method, Pagination switch + page size
-- Query: Datasource selector (filtered by query type — ES vs DB), Query type selector (driven by selected datasource type), Query content textarea
+- Query: Datasource selector (filtered by query type — ES vs DB vs MongoDB), Query type selector (driven by selected datasource type; MongoDB maps to Find/Aggregation), Query content textarea
 - Parameter: Auto-populated table from `${param}` extraction with editable type and remark columns
 - Save + Cancel buttons
+
+**Datasource Editor (`/datasource/create`, `/datasource/edit/:id`):**
+- Type selector includes `MongoDB`; selecting it flips the default MySQL port (3306) to 27017 (a user-customized port is preserved)
 
 **Interface Test (`/interface/test/:id`):**
 - Two-panel horizontal layout
@@ -309,6 +315,7 @@ Each IBATIS fragment is assigned a UUID-based namespace (`ibatis_${uuid}`) befor
 | Elasticsearch Client | `co.elastic.clients` | `elasticsearch-java` | 8.17.0 | compile |
 | Apache HttpClient 5 | `org.apache.httpcomponents.client5` | `httpclient5` | 5.4.2 | compile |
 | Jakarta JSON | `jakarta.json` | `jakarta.json-api` | 2.1.3 | compile |
+| MongoDB Driver | `org.mongodb` | `mongodb-driver-sync` | 5.8.0 (managed by Spring Boot BOM) | compile |
 
 ### 8.2 Frontend (`package.json`)
 

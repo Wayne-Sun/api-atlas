@@ -17,7 +17,8 @@ const deletingId = ref<number | null>(null)
 const typeOptions = [
   { label: 'MySQL', value: 'MySQL' },
   { label: 'PostgreSQL', value: 'PostgreSQL' },
-  { label: 'Elasticsearch', value: 'Elasticsearch' }
+  { label: 'Elasticsearch', value: 'Elasticsearch' },
+  { label: 'MongoDB', value: 'MongoDB' }
 ]
 
 const columns = [

@@ -187,6 +187,7 @@ api-atlas/
 ### Backend: DataSource Type System
 - DataSource type 使用 **String 而非 Java Enum**，通过 `DataSourceFactoryRegistry` + `ConcurrentHashMap<String, DataSourceFactory<?>>` 实现可扩展工厂模式。
 - 新增数据源类型只需实现 `DataSourceFactory<T>` 接口并注册到 registry，无需修改现有代码。
+- 已注册类型：MySQL/PostgreSQL (`DatabaseClientFactory`)、Elasticsearch (`ElasticsearchClientFactory`)、MongoDB (`MongoClientFactory`)。MongoDB 工厂用 `@Value` 注入超时（`atlas.mongodb.connect-timeout-ms` / `server-selection-timeout-ms` / `socket-timeout-ms`，默认 5000/5000/60000），`mongodb://` 或 `mongodb+srv://` 前缀的 host 整体透传为连接串，否则拼接 `mongodb://` URI 并对用户名/密码做百分号编码（`URLEncoder` + `+` → `%20`）；`MongoClients.create(settings)` 为惰性连接，创建不触网。
 
 ### Backend: Dynamic Client Lifecycle
 - `DataSourceClientManager` 管理 DataSource/ES 客户端的启用/禁用生命周期。
@@ -203,6 +204,8 @@ api-atlas/
 | **IBATIS** (`#{param}`) | `DatabaseQueryExecutor` | MyBatis XMLBuilder 动态解析 + `SqlSessionFactory`，in-memory 分页 + `maxMemoryRows` 上限守护 |
 | **ES|QL** | `ElasticsearchQueryExecutor` | `${param}` → `?` 位置替换 → `esClient.sql().query()` |
 | **Query DSL** | `ElasticsearchQueryExecutor` | Jackson `JsonNode` 逐字段替换 `${param}` → `esClient.search()`，自动从 body 中剥离 `index` |
+| **MONGO_FIND** | `MongoQueryExecutor` | Jackson 3 (`tools.jackson`) 树遍历，类型化 `${param}` 替换（数字/布尔/null → 类型化节点，混合文本字符串插值，缺失参数 → null）→ `find(filter)` + `projection`/`sort`，`$skip`/`$limit` 分页 + `countDocuments` total；`MongoException` → `RuntimeException` 包装（含 datasourceId） |
+| **MONGO_AGG** | `MongoQueryExecutor` | `aggregate(pipeline)`（`org.bson.Document`），追加 `$skip`/`$limit` 分页 + `$count` total，拒绝 `$out`/`$merge` 写阶段；`MongoException` → `RuntimeException` 包装（含 datasourceId） |
 
 ### Backend: R Envelope
 - All controller methods return `R<T>`.
