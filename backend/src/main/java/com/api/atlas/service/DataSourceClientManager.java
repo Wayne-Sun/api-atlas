@@ -133,14 +133,60 @@ public class DataSourceClientManager {
     }
 
     /**
-     * Get DataSource by ID (for SQL query execution).
+     * Get DataSource by ID for SQL/IBATIS query execution, creating it lazily
+     * on first access (mirror of {@link #getMongoClient}).
+     *
+     * <p>Unlike the ES/JDBC clients created eagerly on {@link #enableDataSource},
+     * JDBC (MySQL/PostgreSQL/Doris) clients are created on demand and cached.
+     * Non-JDBC types (ES/MongoDB) referenced by SQL/IBATIS interfaces are
+     * rejected up front with the original 400 semantics instead of surfacing a
+     * ClassCastException (500) when cast to {@code javax.sql.DataSource}.</p>
      */
     public javax.sql.DataSource getDataSource(Long id) {
-        javax.sql.DataSource ds = dataSourceMap.get("datasource_" + id);
-        if (ds == null) {
+        String datasourceId = "datasource_" + id;
+        javax.sql.DataSource cached = dataSourceMap.get(datasourceId);
+        if (cached != null) {
+            return cached;
+        }
+        Object lock = lockMap.computeIfAbsent(datasourceId, k -> new Object());
+        synchronized (lock) {
+            javax.sql.DataSource again = dataSourceMap.get(datasourceId);
+            if (again != null) {
+                return again;
+            }
+            DataSource ds = dataSourceMapper.selectById(id);
+            if (ds == null || !"ENABLED".equals(ds.getStatus())) {
+                throw new IllegalArgumentException("DataSource not enabled: " + id);
+            }
+            String type = ds.getType();
+            if (!"MySQL".equals(type) && !"PostgreSQL".equals(type) && !"Doris".equals(type)) {
+                throw new IllegalArgumentException("Unsupported datasource type: " + type);
+            }
+            try {
+                javax.sql.DataSource client = (javax.sql.DataSource) factoryRegistry.getFactory(type)
+                        .createClient(ds.getHost(), ds.getPort(), ds.getDatabaseName(),
+                                ds.getUsername(), decrypt(ds.getPassword()), null);
+                dataSourceMap.put(datasourceId, client);
+                if (!applicationContext.containsBean(datasourceId)) {
+                    applicationContext.getBeanFactory().registerSingleton(datasourceId, client);
+                }
+                return client;
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to create datasource client: " + id, e);
+            }
+        }
+    }
+
+    /**
+     * Get the datasource type (e.g. "MySQL", "PostgreSQL", "Doris") for a
+     * datasource, throwing if it does not exist or is not enabled.
+     */
+    public String getDataSourceType(Long id) {
+        DataSource ds = dataSourceMapper.selectById(id);
+        if (ds == null || !"ENABLED".equals(ds.getStatus())) {
             throw new IllegalArgumentException("DataSource not enabled: " + id);
         }
-        return ds;
+        return ds.getType();
     }
 
     /**

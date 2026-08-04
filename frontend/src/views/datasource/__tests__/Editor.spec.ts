@@ -212,6 +212,49 @@ describe('Editor.vue', () => {
     wrapper.unmount()
   })
 
+  it('type dropdown options include Doris', () => {
+    const wrapper = createWrapper()
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    const options = select.props('options') as { label: string; value: string }[]
+    expect(options).toEqual(
+      expect.arrayContaining([{ label: 'Doris', value: 'Doris' }])
+    )
+    wrapper.unmount()
+  })
+
+  it('selecting Doris with default port 3306 switches port to 9030', async () => {
+    const wrapper = createWrapper()
+
+    // form.port starts at the default 3306
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3306)
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    select.vm.$emit('update:value', 'Doris')
+    await flushPromises()
+
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(9030)
+    wrapper.unmount()
+  })
+
+  it('selecting Doris keeps a non-default port unchanged', async () => {
+    const wrapper = createWrapper()
+
+    // User customized the port to 3307 first
+    const numberInput = wrapper.find('input[type="number"]')
+    await numberInput.setValue('3307')
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3307)
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    select.vm.$emit('update:value', 'Doris')
+    await flushPromises()
+
+    // 3307 !== 3306, so the watcher must NOT clobber it
+    expect(wrapper.findComponent({ name: 'NInputNumber' }).props('value')).toBe(3307)
+    wrapper.unmount()
+  })
+
   it('selecting MongoDB keeps a non-default port unchanged', async () => {
     const wrapper = createWrapper()
 

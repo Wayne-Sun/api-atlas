@@ -8,7 +8,7 @@ API 接口管理与查询平台 —— 统一管理多数据源、动态查询�
 |-------|-----------|
 | Backend | Spring Boot 4.1, JDK 21, Maven |
 | ORM | MyBatis 4.0.1, PageHelper 4.1.1 |
-| Database | MySQL (primary), H2 (test), PostgreSQL (optional) |
+| Database | MySQL (primary), H2 (test), PostgreSQL (optional), Doris (MySQL protocol, jdbc) |
 | Search | Elasticsearch 8.16 (ES\|QL + Query DSL) |
 | NoSQL | MongoDB (mongodb-driver-sync 5.8.0, MONGO_FIND + MONGO_AGG) |
 | Cache / Auth | Redis (token session store, degradable) |
@@ -20,11 +20,11 @@ API 接口管理与查询平台 —— 统一管理多数据源、动态查询�
 
 ## Features
 
-- **Multi-Datasource Management** — JDBC (MySQL, PostgreSQL) + Elasticsearch + MongoDB client lifecycle, extensible factory registry
+- **Multi-Datasource Management** — JDBC (MySQL, PostgreSQL, Doris) + Elasticsearch + MongoDB client lifecycle, extensible factory registry
 - **Dynamic Interface CRUD** — Create API interfaces with 6 query engine types
 - **Query Engines**
-  - **SQL** — JdbcTemplate with `PreparedStatement` parameter binding
-  - **IBATIS** — MyBatis XMLBuilder dynamic SQL, in-memory pagination with safety limits
+  - **SQL** — JdbcTemplate with `PreparedStatement` parameter binding (MySQL/PostgreSQL/Doris; Doris uses `LIMIT offset, count` dialect)
+  - **IBATIS** — MyBatis XMLBuilder dynamic SQL, in-memory pagination with safety limits (MySQL/PostgreSQL/Doris)
   - **ES\|QL** — Elasticsearch query language with parameter substitution
   - **Query DSL** — Full Elasticsearch JSON query with `index` field stripping
   - **MONGO_FIND** — MongoDB `find` queries (filter/projection/sort) with typed `${param}` substitution and `$skip`/`$limit` pagination

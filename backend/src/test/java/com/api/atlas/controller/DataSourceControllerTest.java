@@ -135,6 +135,24 @@ class DataSourceControllerTest {
                 .andExpect(jsonPath("$.data.connected").value(true));
     }
 
+    @Test
+    void testConnection_Doris_ReturnsConnectedTrue() throws Exception {
+        javax.sql.DataSource ds = mock(javax.sql.DataSource.class);
+        when(ds.getConnection()).thenReturn(mock(Connection.class));
+
+        DataSourceFactory<javax.sql.DataSource> dorisFactory = factory();
+        when(dorisFactory.createClient(anyString(), anyInt(), any(), any(), any(), any()))
+                .thenReturn(ds);
+        when(factoryRegistry.<javax.sql.DataSource>getFactory("Doris")).thenReturn(dorisFactory);
+
+        mockMvc.perform(post("/api/datasources/test-connection")
+                        .with(user("admin").roles("ADMIN"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"Doris\",\"host\":\"localhost\",\"port\":9030,\"databaseName\":\"api_atlas\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.connected").value(true));
+    }
+
     @SuppressWarnings("unchecked")
     private static <T> DataSourceFactory<T> factory() {
         return mock(DataSourceFactory.class);

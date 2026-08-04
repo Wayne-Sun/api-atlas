@@ -16,7 +16,8 @@ const typeOptions: { label: string; value: string }[] = [
   { label: 'MySQL', value: 'MySQL' },
   { label: 'PostgreSQL', value: 'PostgreSQL' },
   { label: 'Elasticsearch', value: 'Elasticsearch' },
-  { label: 'MongoDB', value: 'MongoDB' }
+  { label: 'MongoDB', value: 'MongoDB' },
+  { label: 'Doris', value: 'Doris' }
 ]
 
 const formRef = ref()
@@ -33,11 +34,12 @@ const form = ref({
 
 const isElasticsearch = computed(() => form.value.type === 'Elasticsearch')
 
-// Only flip the default MySQL port (3306) when switching to MongoDB — never clobber a user-customized port
+// Only flip the default MySQL port (3306) when switching to MongoDB/Doris — never clobber a user-customized port
 watch(
   () => form.value.type,
   (t) => {
     if (t === 'MongoDB' && form.value.port === 3306) form.value.port = 27017
+    if (t === 'Doris' && form.value.port === 3306) form.value.port = 9030
   }
 )
 

@@ -28,4 +28,9 @@ public class DataSourceFactoryConfig {
     public DatabaseClientFactory postgreSqlClientFactory() {
         return new DatabaseClientFactory("PostgreSQL", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime);
     }
+
+    @Bean
+    public DatabaseClientFactory dorisClientFactory() {
+        return new DatabaseClientFactory("Doris", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime);
+    }
 }

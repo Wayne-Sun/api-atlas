@@ -20,9 +20,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.support.GenericApplicationContext;
 
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -70,6 +76,12 @@ class DataSourceClientManagerTest {
 
     @Mock
     private MongoDatabase mongoDatabase;
+
+    @Mock
+    private DataSourceFactory<javax.sql.DataSource> jdbcFactory;
+
+    @Mock
+    private javax.sql.DataSource jdbcClient;
 
     @InjectMocks
     private DataSourceClientManager manager;
@@ -236,6 +248,179 @@ class DataSourceClientManagerTest {
         verify(mongoClient).close();
     }
 
+    @Test
+    @DisplayName("获取 DataSource - MySQL 惰性创建客户端并注册 Spring bean")
+    void getDataSource_MySQL_LazyCreatesAndRegistersSingleton() throws Exception {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MySQL", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(factoryRegistry.<javax.sql.DataSource>getFactory("MySQL")).thenReturn(jdbcFactory);
+        when(jdbcFactory.createClient(eq("localhost"), eq(3306), eq("testdb"), eq("user"), eq("plain-password"), isNull()))
+            .thenReturn(jdbcClient);
+        when(applicationContext.getBeanFactory()).thenReturn(beanFactory);
+        when(applicationContext.containsBean("datasource_1")).thenReturn(false);
+
+        javax.sql.DataSource result = manager.getDataSource(1L);
+
+        assertThat(result).isSameAs(jdbcClient);
+        verify(jdbcFactory).createClient("localhost", 3306, "testdb", "user", "plain-password", null);
+        verify(beanFactory).registerSingleton("datasource_1", jdbcClient);
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - 二次访问复用缓存客户端")
+    void getDataSource_MySQL_SecondAccess_ReusesCachedClient() throws Exception {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MySQL", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(factoryRegistry.<javax.sql.DataSource>getFactory("MySQL")).thenReturn(jdbcFactory);
+        when(jdbcFactory.createClient(anyString(), anyInt(), any(), any(), any(), nullable(String.class)))
+            .thenReturn(jdbcClient);
+        when(applicationContext.getBeanFactory()).thenReturn(beanFactory);
+        when(applicationContext.containsBean(anyString())).thenReturn(false);
+
+        javax.sql.DataSource first = manager.getDataSource(1L);
+        javax.sql.DataSource second = manager.getDataSource(1L);
+
+        assertThat(first).isSameAs(jdbcClient);
+        assertThat(second).isSameAs(jdbcClient);
+        verify(jdbcFactory, times(1)).createClient(anyString(), anyInt(), any(), any(), any(), nullable(String.class));
+        verify(dataSourceMapper, times(1)).selectById(1L);
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - 数据源未启用时抛异常且不创建客户端")
+    void getDataSource_DisabledStatus_ThrowsIllegalArgumentException() throws Exception {
+        DataSource ds = jdbcDataSourceEntity("DISABLED", "MySQL", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        assertThatThrownBy(() -> manager.getDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not enabled");
+
+        verify(jdbcFactory, never()).createClient(anyString(), anyInt(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - 记录不存在时抛异常")
+    void getDataSource_RecordNotFound_ThrowsIllegalArgumentException() {
+        when(dataSourceMapper.selectById(1L)).thenReturn(null);
+
+        assertThatThrownBy(() -> manager.getDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not enabled");
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - Elasticsearch 类型抛 Unsupported datasource type")
+    void getDataSource_ElasticsearchType_ThrowsUnsupportedDatasourceType() {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "Elasticsearch", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        assertThatThrownBy(() -> manager.getDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported datasource type");
+
+        verify(factoryRegistry, never()).getFactory(anyString());
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - MongoDB 类型抛 Unsupported datasource type")
+    void getDataSource_MongoType_ThrowsUnsupportedDatasourceType() {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MongoDB", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        assertThatThrownBy(() -> manager.getDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unsupported datasource type");
+
+        verify(factoryRegistry, never()).getFactory(anyString());
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - 并发首次访问只创建一次客户端")
+    void getDataSource_ConcurrentFirstAccess_CreatesClientOnlyOnce() throws Exception {
+        // Mockito's mockStatic is thread-confined (only effective on the registering
+        // thread), so worker threads run the REAL EncryptionUtil. Give the manager a
+        // real AES key and the datasource a real ciphertext so real decrypt works.
+        encryptionUtil.close();
+        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
+        keyGen.init(128);
+        SecretKey realKey = keyGen.generateKey();
+        String ciphertext = EncryptionUtil.encrypt("plain-password", realKey);
+        encryptionUtil = mockStatic(EncryptionUtil.class);
+
+        DataSource ds = new DataSource();
+        ds.setId(1L);
+        ds.setName("jdbc-ds");
+        ds.setType("MySQL");
+        ds.setHost("localhost");
+        ds.setPort(3306);
+        ds.setDatabaseName("testdb");
+        ds.setUsername("user");
+        ds.setPassword(ciphertext);
+        ds.setStatus("ENABLED");
+
+        DataSourceClientManager concurrentManager = new DataSourceClientManager(
+                factoryRegistry, dataSourceMapper, realKey, applicationContext, eventPublishers, databaseQueryExecutor);
+
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(factoryRegistry.<javax.sql.DataSource>getFactory("MySQL")).thenReturn(jdbcFactory);
+        when(jdbcFactory.createClient(anyString(), anyInt(), any(), any(), any(), nullable(String.class)))
+            .thenReturn(jdbcClient);
+        when(applicationContext.getBeanFactory()).thenReturn(beanFactory);
+        when(applicationContext.containsBean(anyString())).thenReturn(false);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CountDownLatch start = new CountDownLatch(1);
+            List<Future<javax.sql.DataSource>> futures = new ArrayList<>();
+            for (int i = 0; i < 2; i++) {
+                futures.add(executor.submit(() -> {
+                    start.await();
+                    return concurrentManager.getDataSource(1L);
+                }));
+            }
+            start.countDown();
+            for (Future<javax.sql.DataSource> future : futures) {
+                assertThat(future.get()).isSameAs(jdbcClient);
+            }
+        } finally {
+            executor.shutdownNow();
+        }
+
+        verify(jdbcFactory, times(1)).createClient(anyString(), anyInt(), any(), any(), any(), nullable(String.class));
+        verify(dataSourceMapper, times(1)).selectById(1L);
+    }
+
+    @Test
+    @DisplayName("获取数据源类型 - 启用数据源正常返回类型")
+    void getDataSourceType_Enabled_ReturnsType() {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MySQL", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        assertThat(manager.getDataSourceType(1L)).isEqualTo("MySQL");
+    }
+
+    @Test
+    @DisplayName("获取数据源类型 - 数据源不存在时抛异常")
+    void getDataSourceType_NotFound_ThrowsIllegalArgumentException() {
+        when(dataSourceMapper.selectById(1L)).thenReturn(null);
+
+        assertThatThrownBy(() -> manager.getDataSourceType(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not enabled");
+    }
+
+    @Test
+    @DisplayName("获取数据源类型 - 数据源未启用时抛异常")
+    void getDataSourceType_DisabledStatus_ThrowsIllegalArgumentException() {
+        DataSource ds = jdbcDataSourceEntity("DISABLED", "PostgreSQL", "testdb");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        assertThatThrownBy(() -> manager.getDataSourceType(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("not enabled");
+    }
+
     private DataSource mongoDataSource(String status, String databaseName) {
         DataSource ds = new DataSource();
         ds.setId(1L);
@@ -243,6 +428,20 @@ class DataSourceClientManagerTest {
         ds.setType("MongoDB");
         ds.setHost("localhost");
         ds.setPort(27017);
+        ds.setDatabaseName(databaseName);
+        ds.setUsername("user");
+        ds.setPassword("encrypted-password");
+        ds.setStatus(status);
+        return ds;
+    }
+
+    private DataSource jdbcDataSourceEntity(String status, String type, String databaseName) {
+        DataSource ds = new DataSource();
+        ds.setId(1L);
+        ds.setName("jdbc-ds");
+        ds.setType(type);
+        ds.setHost("localhost");
+        ds.setPort(3306);
         ds.setDatabaseName(databaseName);
         ds.setUsername("user");
         ds.setPassword("encrypted-password");

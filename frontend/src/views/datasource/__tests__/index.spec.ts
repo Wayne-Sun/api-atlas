@@ -87,6 +87,18 @@ describe('index.vue', () => {
     wrapper.unmount()
   })
 
+  it('filter type dropdown options include Doris', async () => {
+    const wrapper = createWrapper()
+    await flushPromises()
+
+    const select = wrapper.findComponent({ name: 'NSelect' })
+    const options = select.props('options') as { label: string; value: string }[]
+    expect(options).toEqual(
+      expect.arrayContaining([{ label: 'Doris', value: 'Doris' }])
+    )
+    wrapper.unmount()
+  })
+
   it('fetches datasource list on mount', async () => {
     const wrapper = createWrapper()
     await flushPromises()

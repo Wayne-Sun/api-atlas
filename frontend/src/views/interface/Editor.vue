@@ -76,7 +76,7 @@ const datasourceOptions = computed(() => {
       if (form.value.queryType === 'MONGO_FIND' || form.value.queryType === 'MONGO_AGG') {
         return ds.type === 'MongoDB'
       }
-      return ds.type === 'MySQL' || ds.type === 'PostgreSQL'
+      return ds.type === 'MySQL' || ds.type === 'PostgreSQL' || ds.type === 'Doris'
     })
     .map(ds => ({ label: `${ds.name} (${ds.type})`, value: ds.id }))
 })
@@ -136,6 +136,10 @@ watch(() => form.value.dataSourceId, (newId) => {
   } else if (ds?.type === 'MongoDB') {
     if (form.value.queryType !== 'MONGO_FIND' && form.value.queryType !== 'MONGO_AGG') {
       form.value.queryType = 'MONGO_FIND'
+    }
+  } else if (ds?.type === 'Doris') {
+    if (form.value.queryType !== 'SQL' && form.value.queryType !== 'IBATIS') {
+      form.value.queryType = 'SQL'
     }
   } else if (ds?.type === 'MySQL' || ds?.type === 'PostgreSQL') {
     if (form.value.queryType === 'ESQL' || form.value.queryType === 'QUERY_DSL') {

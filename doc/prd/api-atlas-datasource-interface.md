@@ -17,6 +17,7 @@ API Atlas is a low-code API gateway that enables developers to expose SQL querie
 | Type | Driver | Connection Pool | URL Pattern |
 |------|--------|----------------|-------------|
 | MySQL | `com.mysql.cj.jdbc.Driver` | HikariCP | `jdbc:mysql://{host}:{port}/{database}` |
+| Doris | `com.mysql.cj.jdbc.Driver` | HikariCP | `jdbc:mysql://{host}:{port}/{database}` (default port 9030, MySQL wire protocol, read-only queries only) |
 | PostgreSQL | `org.postgresql.Driver` | HikariCP | `jdbc:postgresql://{host}:{port}/{database}` |
 | Elasticsearch | `co.elastic.clients.transport.RestClientTransport` | Apache HttpClient 5 | `http://{host}:{port}` |
 | MongoDB | `com.mongodb.client.MongoClient` | Lazy driver connection (`MongoClients.create`, no pool) | `mongodb://{host}:{port}` or full `mongodb://` / `mongodb+srv://` string passthrough |
@@ -51,14 +52,14 @@ The type registry follows an extensible pattern: adding a new data source type r
 
 | Query Type | Backend Handler | Parameter Binding | Use Case |
 |------------|----------------|-------------------|----------|
-| `SQL` | `JdbcTemplate` | `PreparedStatement` with positional `?` placeholders (auto-converted from `${param}`) | Simple read-only queries against relational databases |
-| `IBATIS` | MyBatis `SqlSession` | Dynamic XML fragment with `${param}` → MyBatis `#{}` / `${}` conversion | Complex queries requiring conditional logic, joins, or subqueries |
+| `SQL` | `JdbcTemplate` | `PreparedStatement` with positional `?` placeholders (auto-converted from `${param}`) | Simple read-only queries against relational databases (MySQL, PostgreSQL, Doris) |
+| `IBATIS` | MyBatis `SqlSession` | Dynamic XML fragment with `${param}` → MyBatis `#{}` / `${}` conversion | Complex queries requiring conditional logic, joins, or subqueries (MySQL, PostgreSQL, Doris) |
 | `ESQL` | Elasticsearch `EsClient` | Positional `?` placeholders in ES\|QL query strings | Aggregation and search queries against Elasticsearch |
 | `QUERY_DSL` | Elasticsearch `EsClient` | JSON tree-walk replacement of `"{{paramName}}"` placeholders in the DSL body | Full Elasticsearch Query DSL with complex nested structures |
 | `MONGO_FIND` | MongoDB driver `MongoCollection.find()` | Typed JSON tree-walk replacement of `${param}` (numbers/booleans/null → typed nodes, mixed text interpolated as string) | Read-only MongoDB find queries (filter/projection/sort) with `$skip`/`$limit` pagination and `countDocuments` total |
 | `MONGO_AGG` | MongoDB driver `MongoCollection.aggregate()` | Typed JSON tree-walk replacement of `${param}` | Aggregation pipelines with appended `$skip`/`$limit` pagination and `$count` total; write stages `$out`/`$merge` rejected |
 
-**SQL** queries accept `${paramName}` placeholders that are converted to JDBC `?` positional parameters before execution, ensuring PreparedStatement-level injection protection. **IBATIS** fragments are wrapped in a MyBatis `<select>` template and executed through `SqlSession.selectList()`. **ES|QL** uses positional `?` parameters via the Elasticsearch ES|QL client. **Query DSL** performs a JSON tree-walk replacement — every `"{{paramName}}"` string value in the parsed JSON tree is replaced with the supplied parameter value before sending to Elasticsearch. **MONGO_FIND** and **MONGO_AGG** run against the MongoDB driver: a JSON tree-walk replaces `${param}` with typed nodes (numbers, booleans, null), then `find()`/`aggregate()` executes read-only against the target collection, with pagination and total counts applied by the executor.
+**SQL** queries accept `${paramName}` placeholders that are converted to JDBC `?` positional parameters before execution, ensuring PreparedStatement-level injection protection. **IBATIS** fragments are wrapped in a MyBatis `<select>` template and executed through `SqlSession.selectList()`. Doris (MySQL wire protocol, default port 9030) is executed through the **SQL** and **IBATIS** engines; its pagination uses `LIMIT offset, count` syntax (instead of `LIMIT ? OFFSET ?`). **ES|QL** uses positional `?` parameters via the Elasticsearch ES|QL client. **Query DSL** performs a JSON tree-walk replacement — every `"{{paramName}}"` string value in the parsed JSON tree is replaced with the supplied parameter value before sending to Elasticsearch. **MONGO_FIND** and **MONGO_AGG** run against the MongoDB driver: a JSON tree-walk replaces `${param}` with typed nodes (numbers, booleans, null), then `find()`/`aggregate()` executes read-only against the target collection, with pagination and total counts applied by the executor.
 
 ### 3.2 Status State Machine
 
@@ -310,12 +311,14 @@ Each IBATIS fragment is assigned a UUID-based namespace (`ibatis_${uuid}`) befor
 |-----------|---------|-----------|---------|-------|
 | MyBatis Spring Boot | `org.mybatis.spring.boot` | `mybatis-spring-boot-starter` | 3.0.4 | compile |
 | PageHelper | `com.github.pagehelper` | `pagehelper-spring-boot-starter` | 2.1.0 | compile |
-| MySQL Connector | `com.mysql` | `mysql-connector-j` | 9.2.0 | runtime |
+| MySQL Connector | `com.mysql` | `mysql-connector-j` | 9.7.0 (managed by Spring Boot BOM) | runtime |
 | PostgreSQL Driver | `org.postgresql` | `postgresql` | 42.7.5 | runtime |
 | Elasticsearch Client | `co.elastic.clients` | `elasticsearch-java` | 8.17.0 | compile |
 | Apache HttpClient 5 | `org.apache.httpcomponents.client5` | `httpclient5` | 5.4.2 | compile |
 | Jakarta JSON | `jakarta.json` | `jakarta.json-api` | 2.1.3 | compile |
 | MongoDB Driver | `org.mongodb` | `mongodb-driver-sync` | 5.8.0 (managed by Spring Boot BOM) | compile |
+
+> **MySQL Connector / Doris compatibility:** `mysql-connector-j` has no explicit version in `pom.xml` — it is managed by the Spring Boot 4.1 BOM (currently 9.7.0). When the JDBC URL targets Apache Doris, `useServerPrepStmts=false` must be appended: server-side prepared statements in mysql-connector-j >= 9.5.0 return empty result sets against Doris (official issue #60634). `DatabaseClientFactory` adds this parameter for the Doris branch only.
 
 ### 8.2 Frontend (`package.json`)
 

@@ -110,6 +110,7 @@ describe('Editor.vue', () => {
       { id: 1, name: 'MySQL Local', type: 'MySQL', host: 'localhost', port: 3306, status: 'active', createdAt: '', updatedAt: '' },
       { id: 2, name: 'ES Prod', type: 'Elasticsearch', host: 'es.local', port: 9200, status: 'active', createdAt: '', updatedAt: '' },
       { id: 3, name: 'Mongo Prod', type: 'MongoDB', host: 'mongo.local', port: 27017, status: 'active', createdAt: '', updatedAt: '' },
+      { id: 4, name: 'Doris OLAP', type: 'Doris', host: 'doris.local', port: 9030, status: 'active', createdAt: '', updatedAt: '' },
     ]
     mockFetchDatasourceList.mockResolvedValue(undefined)
     mockInterfaceGetById.mockResolvedValue(undefined)
@@ -291,5 +292,34 @@ describe('Editor.vue', () => {
     await nextTick()
 
     expect(vm.form.dataSourceId).toBeNull()
+  })
+
+  it('queryType=SQL - datasourceOptions includes Doris datasources', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { queryType: string }
+      datasourceOptions: Array<{ label: string; value: number }>
+    }
+
+    expect(vm.form.queryType).toBe('SQL')
+    expect(vm.datasourceOptions.map(o => o.value)).toContain(4)
+  })
+
+  it('datasource switched to Doris - queryType auto-becomes SQL', async () => {
+    const { wrapper } = await mountEditor()
+    const vm = wrapper.vm as unknown as {
+      form: { dataSourceId: number | null; queryType: string }
+    }
+
+    vm.form.queryType = 'MONGO_FIND'
+    await nextTick()
+    await nextTick()
+    expect(vm.form.queryType).toBe('MONGO_FIND')
+
+    vm.form.dataSourceId = 4
+    await nextTick()
+    await nextTick()
+
+    expect(vm.form.queryType).toBe('SQL')
   })
 })

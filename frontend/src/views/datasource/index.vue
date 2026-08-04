@@ -18,7 +18,8 @@ const typeOptions = [
   { label: 'MySQL', value: 'MySQL' },
   { label: 'PostgreSQL', value: 'PostgreSQL' },
   { label: 'Elasticsearch', value: 'Elasticsearch' },
-  { label: 'MongoDB', value: 'MongoDB' }
+  { label: 'MongoDB', value: 'MongoDB' },
+  { label: 'Doris', value: 'Doris' }
 ]
 
 const columns = [

@@ -19,7 +19,6 @@ import javax.sql.DataSource;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,13 +38,65 @@ public class DatabaseQueryExecutor {
     @Value("${atlas.executor.ibatis.cache-max-size:100}")
     private int cacheMaxSize;
 
-    private final ConcurrentHashMap<Long, JdbcTemplate> jdbcTemplateCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, JdbcTemplateHolder> jdbcTemplateCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, SqlSessionFactory> ibatisCache = new ConcurrentHashMap<>();
 
     private final DataSourceClientManager clientManager;
 
     public DatabaseQueryExecutor(DataSourceClientManager clientManager) {
         this.clientManager = clientManager;
+    }
+
+    /**
+     * Cached JdbcTemplate + dialect flag resolved once at creation.
+     * Package-visible so tests can observe the dialect.
+     */
+    static class JdbcTemplateHolder {
+        private final JdbcTemplate jdbcTemplate;
+        private final boolean dorisDialect;
+
+        JdbcTemplateHolder(JdbcTemplate jdbcTemplate, boolean dorisDialect) {
+            this.jdbcTemplate = jdbcTemplate;
+            this.dorisDialect = dorisDialect;
+        }
+
+        JdbcTemplate jdbcTemplate() {
+            return jdbcTemplate;
+        }
+
+        boolean dorisDialect() {
+            return dorisDialect;
+        }
+    }
+
+    /**
+     * Paginated SQL + bind values in parameter order. Package-visible so tests
+     * can assert the parameter-order detail (error-prone per dialect).
+     */
+    record PageSql(String sql, Object[] pageValues) {}
+
+    /**
+     * Build pagination SQL + bind values. Doris uses {@code LIMIT ?, ?}
+     * (offset, row_count); MySQL/PostgreSQL use {@code LIMIT ? OFFSET ?}.
+     * COUNT subquery is shared across dialects.
+     */
+    static PageSql buildPageSql(String preparedSql, boolean dorisDialect, int offset, int pageSize) {
+        if (dorisDialect) {
+            return new PageSql(preparedSql + " LIMIT ?, ?", new Object[]{offset, pageSize});
+        }
+        return new PageSql(preparedSql + " LIMIT ? OFFSET ?", new Object[]{pageSize, offset});
+    }
+
+    /**
+     * Get (or lazily create) the holder for a datasource. Package-visible so
+     * tests can observe the resolved dialect without reading the private cache.
+     */
+    JdbcTemplateHolder getOrCreateHolder(Long datasourceId) {
+        return jdbcTemplateCache.computeIfAbsent(datasourceId, id -> {
+            String type = clientManager.getDataSourceType(id);
+            JdbcTemplate jt = new JdbcTemplate(clientManager.getDataSource(id));
+            return new JdbcTemplateHolder(jt, "Doris".equals(type));
+        });
     }
 
     /**
@@ -57,8 +108,8 @@ public class DatabaseQueryExecutor {
     public QueryResult executeSql(Long datasourceId, String queryContent,
                                    Map<String, Object> params, int pageNum, int pageSize) {
         long start = System.currentTimeMillis();
-        JdbcTemplate jt = jdbcTemplateCache.computeIfAbsent(datasourceId,
-                id -> new JdbcTemplate(clientManager.getDataSource(id)));
+        JdbcTemplateHolder holder = getOrCreateHolder(datasourceId);
+        JdbcTemplate jt = holder.jdbcTemplate();
 
         // Replace ${paramName} with ? and collect param names in order
         List<String> paramNames = new ArrayList<>();
@@ -66,18 +117,14 @@ public class DatabaseQueryExecutor {
         Object[] paramValues = buildParamValues(paramNames, params);
 
         if (pageNum > 0 && pageSize > 0) {
-            // Paginated: COUNT(*) + LIMIT/OFFSET
+            // Paginated: COUNT(*) + LIMIT/OFFSET (Doris uses LIMIT ?, ?)
             String countSql = "SELECT COUNT(*) FROM (" + preparedSql + ") AS total";
             Long total = jt.queryForObject(countSql, Long.class, paramValues);
 
             int offset = (pageNum - 1) * pageSize;
-            String pageSql = preparedSql + " LIMIT ? OFFSET ?";
+            PageSql pageSql = buildPageSql(preparedSql, holder.dorisDialect(), offset, pageSize);
 
-            Object[] pageValues = Arrays.copyOf(paramValues, paramValues.length + 2);
-            pageValues[paramValues.length] = pageSize;
-            pageValues[paramValues.length + 1] = offset;
-
-            List<Map<String, Object>> rows = jt.queryForList(pageSql, pageValues);
+            List<Map<String, Object>> rows = jt.queryForList(pageSql.sql(), pageSql.pageValues());
 
             QueryResult result = new QueryResult();
             result.setRows(rows);

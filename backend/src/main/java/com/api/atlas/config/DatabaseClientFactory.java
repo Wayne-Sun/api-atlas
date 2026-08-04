@@ -26,6 +26,13 @@ public class DatabaseClientFactory implements DataSourceFactory<DataSource> {
         String jdbcUrl;
         if ("PostgreSQL".equals(databaseType)) {
             jdbcUrl = "jdbc:postgresql://" + host + ":" + port + "/" + (dbName.isEmpty() ? "public" : dbName);
+        } else if ("Doris".equals(databaseType)) {
+            // useServerPrepStmts=false is MANDATORY for mysql-connector-j >= 9.5.0 connecting to
+            // Apache Doris (official issue #60634) — server-side prepared statements return empty data.
+            jdbcUrl = "jdbc:mysql://" + host + ":" + port + "/" + dbName
+                    + "?useUnicode=true&characterEncoding=utf-8&useTimezone=true&serverTimezone=Asia/Shanghai"
+                    + "&useSSL=false&allowPublicKeyRetrieval=true&zeroDateTimeBehavior=convertToNull"
+                    + "&useServerPrepStmts=false";
         } else {
             jdbcUrl = "jdbc:mysql://" + host + ":" + port + "/" + dbName
                     + "?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai";
