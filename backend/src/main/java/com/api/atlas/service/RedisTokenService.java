@@ -33,4 +33,11 @@ public class RedisTokenService {
     public boolean exists(String jti) {
         return redisTemplate.opsForValue().get(KEY_PREFIX + jti) != null;
     }
+
+    public void revokeAll() {
+        var keys = redisTemplate.keys(KEY_PREFIX + "*");
+        if (keys != null && !keys.isEmpty()) {
+            redisTemplate.delete(keys);
+        }
+    }
 }

@@ -30,17 +30,6 @@ public class DataSourceService {
         return EncryptionUtil.encrypt(plaintext, secretKey);
     }
 
-    private String decrypt(String ciphertext) {
-        return EncryptionUtil.decrypt(ciphertext, secretKey);
-    }
-
-    private String getDecryptPassword(String encryptedPassword) {
-        if (encryptedPassword == null || encryptedPassword.isBlank()) {
-            return encryptedPassword;
-        }
-        return decrypt(encryptedPassword);
-    }
-
     public DataSource create(DataSourceCreateDTO dto) {
         DataSource dataSource = new DataSource();
         dataSource.setName(dto.getName());
@@ -53,6 +42,9 @@ public class DataSourceService {
         dataSource.setApiKey(dto.getApiKey());
         dataSource.setStatus("ENABLED");
         dataSourceMapper.insert(dataSource);
+        // Security (F3): never expose credentials to the client — DB keeps the ciphertext.
+        dataSource.setPassword(null);
+        dataSource.setApiKey(null);
         return dataSource;
     }
 
@@ -62,7 +54,9 @@ public class DataSourceService {
         if (ds == null) {
             throw new NoSuchElementException("DataSource not found: " + id);
         }
-        ds.setPassword(getDecryptPassword(ds.getPassword()));
+        // selectById includes password/api_key (BaseColumns) — decrypt only in DataSourceClientManager, never in responses.
+        ds.setPassword(null);
+        ds.setApiKey(null);
         return ds;
     }
 
@@ -70,6 +64,10 @@ public class DataSourceService {
     public PageInfo<DataSource> list(String name, String type, String status, int pageNum, int pageSize) {
         PageHelper.startPage(pageNum, pageSize);
         List<DataSource> list = dataSourceMapper.selectList(name, type, status);
+        for (DataSource ds : list) {
+            ds.setPassword(null);
+            ds.setApiKey(null);
+        }
         return new PageInfo<>(list);
     }
 
@@ -97,10 +95,10 @@ public class DataSourceService {
         if (dto.getUsername() != null) {
             existing.setUsername(dto.getUsername());
         }
-        if (dto.getPassword() != null) {
+        if (dto.getPassword() != null && !dto.getPassword().isBlank()) {
             existing.setPassword(encrypt(dto.getPassword()));
         }
-        if (dto.getApiKey() != null) {
+        if (dto.getApiKey() != null && !dto.getApiKey().isBlank()) {
             existing.setApiKey(dto.getApiKey());
         }
         if (dto.getStatus() != null) {
@@ -108,7 +106,10 @@ public class DataSourceService {
         }
 
         dataSourceMapper.updateById(existing);
-        return dataSourceMapper.selectById(id);
+        DataSource updated = dataSourceMapper.selectById(id);
+        updated.setPassword(null);
+        updated.setApiKey(null);
+        return updated;
     }
 
     public void delete(Long id) {

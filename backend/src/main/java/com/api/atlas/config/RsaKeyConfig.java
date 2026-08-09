@@ -28,6 +28,12 @@ public class RsaKeyConfig {
         if ("CHANGE_ME_PLEASE_REPLACE_WITH_RSA_PUBLIC_KEY_PEM".equals(publicKey)) {
             throw new IllegalStateException("atlas.jwt.public-key must be changed from default");
         }
+        if (privateKey.length() < 200 || !privateKey.contains("-----BEGIN")) {
+            throw new IllegalStateException("atlas.jwt.private-key must be a valid PEM-encoded RSA private key");
+        }
+        if (publicKey.length() < 200 || !publicKey.contains("-----BEGIN")) {
+            throw new IllegalStateException("atlas.jwt.public-key must be a valid PEM-encoded RSA public key");
+        }
     }
 
     @Bean

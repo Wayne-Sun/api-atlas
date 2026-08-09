@@ -3,11 +3,13 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInterfaceStore } from '@/stores/interface'
 import type { TestResult } from '@/stores/interface'
+import { useAuthStore } from '@/stores/auth'
 import { NCard, NForm, NFormItem, NInput, NInputNumber, NButton, NSpace, NTag, useMessage } from 'naive-ui'
 
 const router = useRouter()
 const route = useRoute()
 const store = useInterfaceStore()
+const authStore = useAuthStore()
 const message = useMessage()
 
 const loading = ref(false)
@@ -111,7 +113,7 @@ async function handleOnline() {
           无需参数，直接测试
         </div>
         <NSpace>
-          <NButton type="primary" @click="handleTest" :loading="loading">测试</NButton>
+          <NButton v-if="authStore.isAdmin" type="primary" @click="handleTest" :loading="loading">测试</NButton>
           <NButton @click="handleReset">重置</NButton>
         </NSpace>
       </NCard>
@@ -125,7 +127,7 @@ async function handleOnline() {
         <div v-else style="color: #999; padding: 32px 0; text-align: center;">
           点击"测试"按钮执行查询
         </div>
-        <NSpace v-if="result" style="margin-top: 16px;">
+        <NSpace v-if="result && authStore.isAdmin" style="margin-top: 16px;">
           <NButton @click="router.push(`/interface/edit/${route.params.id}`)">返回编辑</NButton>
           <NButton v-if="iface?.status !== 'ONLINE'" type="primary" @click="handleOnline">提交上线</NButton>
         </NSpace>

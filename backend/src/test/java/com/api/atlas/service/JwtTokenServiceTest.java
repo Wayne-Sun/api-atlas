@@ -47,6 +47,10 @@ class JwtTokenServiceTest {
         Jwt jwt = decoder.decode(token);
 
         assertEquals("testuser", jwt.getSubject());
+        // getIssuer() resolves iss as a URL in Spring Security 7.x — read the raw claim instead
+        assertEquals("api-atlas", jwt.getClaimAsString("iss"), "Access token must declare issuer api-atlas");
+        assertNotNull(jwt.getAudience());
+        assertTrue(jwt.getAudience().contains("api-atlas"), "Access token audience must contain api-atlas");
         assertEquals("ADMIN", jwt.getClaimAsString("role"));
         assertNotNull(jwt.getExpiresAt());
         assertTrue(jwt.getExpiresAt().isAfter(Instant.now()));
@@ -65,6 +69,9 @@ class JwtTokenServiceTest {
         Jwt jwt = decoder.decode(token);
 
         assertEquals("testuser", jwt.getSubject());
+        assertEquals("api-atlas", jwt.getClaimAsString("iss"), "Refresh token must declare issuer api-atlas");
+        assertNotNull(jwt.getAudience());
+        assertTrue(jwt.getAudience().contains("api-atlas"), "Refresh token audience must contain api-atlas");
         assertNotNull(jwt.getExpiresAt());
         assertTrue(jwt.getExpiresAt().isAfter(Instant.now()));
     }

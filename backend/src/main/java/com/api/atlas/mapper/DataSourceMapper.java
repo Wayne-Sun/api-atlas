@@ -15,6 +15,8 @@ public interface DataSourceMapper {
 
     List<DataSource> selectList(@Param("name") String name, @Param("type") String type, @Param("status") String status);
 
+    List<DataSource> selectAll();
+
     int updateById(DataSource dataSource);
 
     int updateStatus(@Param("id") Long id, @Param("status") String status);

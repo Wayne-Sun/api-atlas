@@ -18,6 +18,10 @@ const mockInterfaceGetById = vi.fn().mockResolvedValue(undefined)
 let mockDatasourceList: Array<Record<string, unknown>> = []
 
 // ── Mock naive-ui ────────────────────────────────────────────────
+const mockAuthStore = vi.hoisted(() => ({
+  isAdmin: false,
+}))
+
 vi.mock('naive-ui', () => ({
   NForm: {
     name: 'NForm',
@@ -73,6 +77,10 @@ vi.mock('@/stores/datasource', () => ({
   })),
 }))
 
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => mockAuthStore,
+}))
+
 // ── Router + mount helper ────────────────────────────────────────
 function makeRouter() {
   return createRouter({
@@ -106,6 +114,7 @@ async function mountEditor(initialRoute = '/interface/create') {
 describe('Editor.vue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockAuthStore.isAdmin = false
     mockDatasourceList = [
       { id: 1, name: 'MySQL Local', type: 'MySQL', host: 'localhost', port: 3306, status: 'active', createdAt: '', updatedAt: '' },
       { id: 2, name: 'ES Prod', type: 'Elasticsearch', host: 'es.local', port: 9200, status: 'active', createdAt: '', updatedAt: '' },
@@ -147,15 +156,19 @@ describe('Editor.vue', () => {
     expect(html).toContain('查询内容')
   })
 
-  it('renders save and cancel buttons', async () => {
+  it('renders save and cancel buttons for admin', async () => {
+    mockAuthStore.isAdmin = true
     const { wrapper } = await mountEditor()
     const buttons = wrapper.findAll('button')
     const texts = buttons.map(b => b.text())
     expect(texts).toContain('保存')
     expect(texts).toContain('取消')
+    mockAuthStore.isAdmin = false
+    wrapper.unmount()
   })
 
   it('calls validate on save click', async () => {
+    mockAuthStore.isAdmin = true
     mockValidate.mockRejectedValue(new Error('fail'))
     const { wrapper } = await mountEditor()
 
@@ -164,9 +177,12 @@ describe('Editor.vue', () => {
     await nextTick()
 
     expect(mockValidate).toHaveBeenCalled()
+    mockAuthStore.isAdmin = false
+    wrapper.unmount()
   })
 
   it('cancel button navigates to /interface', async () => {
+    mockAuthStore.isAdmin = true
     const { wrapper, router } = await mountEditor()
 
     const cancelBtn = wrapper.findAll('button').find(b => b.text() === '取消')!
@@ -174,6 +190,8 @@ describe('Editor.vue', () => {
     await flushPromises()
 
     expect(router.currentRoute.value.path).toBe('/interface')
+    mockAuthStore.isAdmin = false
+    wrapper.unmount()
   })
 
   it('extractParams extracts placeholders from queryContent', async () => {
@@ -211,6 +229,7 @@ describe('Editor.vue', () => {
   })
 
   it('saves via store.create in create mode on valid form', async () => {
+    mockAuthStore.isAdmin = true
     // Must resolve truthy: component checks `if (!valid) return` after .catch
     mockValidate.mockResolvedValue(true)
     const { wrapper } = await mountEditor()
@@ -221,6 +240,8 @@ describe('Editor.vue', () => {
 
     expect(mockInterfaceCreate).toHaveBeenCalled()
     expect(mockMessage.success).toHaveBeenCalledWith('创建成功')
+    mockAuthStore.isAdmin = false
+    wrapper.unmount()
   })
 
   it('shows placeholder text when params list is empty', async () => {
@@ -321,5 +342,28 @@ describe('Editor.vue', () => {
     await nextTick()
 
     expect(vm.form.queryType).toBe('SQL')
+  })
+
+  it('admin sees save and cancel buttons', async () => {
+    mockAuthStore.isAdmin = true
+    const { wrapper } = await mountEditor()
+    await flushPromises()
+
+    const texts = wrapper.findAll('button').map(b => b.text())
+    expect(texts).toContain('保存')
+    expect(texts).toContain('取消')
+    mockAuthStore.isAdmin = false
+    wrapper.unmount()
+  })
+
+  it('nonAdmin does not see save and cancel buttons', async () => {
+    mockAuthStore.isAdmin = false
+    const { wrapper } = await mountEditor()
+    await flushPromises()
+
+    const texts = wrapper.findAll('button').map(b => b.text())
+    expect(texts).not.toContain('保存')
+    expect(texts).not.toContain('取消')
+    wrapper.unmount()
   })
 })

@@ -27,12 +27,21 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @ActiveProfiles("test")
 class AuthControllerTest {
+
+    /**
+     * The exact serialized 401 body every login-failure branch must return.
+     * R.error() serializes the R envelope via Jackson (no NON_NULL inclusion), so the
+     * null data/pageNum/pageSize/total fields ARE present on the wire.
+     */
+    private static final String GENERIC_401_BODY =
+            "{\"code\":401,\"data\":null,\"message\":\"Invalid username or password\",\"pageNum\":null,\"pageSize\":null,\"total\":null}";
 
     @Autowired
     private WebApplicationContext context;
@@ -88,7 +97,7 @@ class AuthControllerTest {
     }
 
     @Test
-    void login_InvalidPassword_Returns401() throws Exception {
+    void login_WrongPassword_Returns401GenericBody() throws Exception {
         String encodedPassword = passwordEncoder.encode("correctpassword");
         User user = new User();
         user.setId(1L);
@@ -101,11 +110,14 @@ class AuthControllerTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"admin\",\"password\":\"wrongpassword\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("Invalid username or password"))
+                .andExpect(content().string(GENERIC_401_BODY));
     }
 
     @Test
-    void login_DisabledAccount_Returns401() throws Exception {
+    void login_DisabledUser_Returns401GenericBody() throws Exception {
         User user = new User();
         user.setId(1L);
         user.setUsername("disableduser");
@@ -118,17 +130,22 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"disableduser\",\"password\":\"password123\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Account disabled"));
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("Invalid username or password"))
+                .andExpect(content().string(GENERIC_401_BODY));
     }
 
     @Test
-    void login_NonExistentUser_Returns401() throws Exception {
+    void login_NonExistentUser_Returns401GenericBody() throws Exception {
         when(userService.getUserByUsername("nonexistent")).thenReturn(null);
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"nonexistent\",\"password\":\"password123\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(401))
+                .andExpect(jsonPath("$.message").value("Invalid username or password"))
+                .andExpect(content().string(GENERIC_401_BODY));
     }
 
     @Test

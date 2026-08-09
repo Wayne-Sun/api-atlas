@@ -3,9 +3,11 @@ package com.api.atlas.service;
 import com.api.atlas.config.DataSourceFactory;
 import com.api.atlas.config.DataSourceFactoryRegistry;
 import com.api.atlas.config.EncryptionUtil;
+import com.api.atlas.config.HostSecurityValidator;
 import com.api.atlas.mapper.DataSourceMapper;
 import com.api.atlas.model.DataSource;
 import com.api.atlas.service.executor.DatabaseQueryExecutor;
+import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoDatabase;
 import org.junit.jupiter.api.AfterEach;
@@ -82,6 +84,15 @@ class DataSourceClientManagerTest {
 
     @Mock
     private javax.sql.DataSource jdbcClient;
+
+    @Mock
+    private DataSourceFactory<ElasticsearchClient> esFactory;
+
+    @Mock
+    private ElasticsearchClient esClient;
+
+    @Mock
+    private HostSecurityValidator hostSecurityValidator;
 
     @InjectMocks
     private DataSourceClientManager manager;
@@ -196,6 +207,22 @@ class DataSourceClientManagerTest {
         assertThatThrownBy(() -> manager.getMongoClient(1L))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("not enabled");
+    }
+
+    @Test
+    @DisplayName("获取 MongoClient - 主机被 SSRF 校验拒绝时抛异常且不创建客户端")
+    void getMongoClient_BlockedHost_ThrowsIllegalArgumentException() throws Exception {
+        DataSource ds = mongoDataSource("ENABLED", "testdb");
+        ds.setHost("127.0.0.1");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(hostSecurityValidator.isBlocked("127.0.0.1")).thenReturn(true);
+
+        assertThatThrownBy(() -> manager.getMongoClient(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Host not allowed");
+
+        verify(hostSecurityValidator).isBlocked("127.0.0.1");
+        verify(mongoFactory, never()).createClient(anyString(), anyInt(), any(), any(), any(), any());
     }
 
     @Test
@@ -360,7 +387,8 @@ class DataSourceClientManagerTest {
         ds.setStatus("ENABLED");
 
         DataSourceClientManager concurrentManager = new DataSourceClientManager(
-                factoryRegistry, dataSourceMapper, realKey, applicationContext, eventPublishers, databaseQueryExecutor);
+                factoryRegistry, dataSourceMapper, realKey, applicationContext, eventPublishers, databaseQueryExecutor,
+                hostSecurityValidator);
 
         when(dataSourceMapper.selectById(1L)).thenReturn(ds);
         when(factoryRegistry.<javax.sql.DataSource>getFactory("MySQL")).thenReturn(jdbcFactory);
@@ -389,6 +417,64 @@ class DataSourceClientManagerTest {
 
         verify(jdbcFactory, times(1)).createClient(anyString(), anyInt(), any(), any(), any(), nullable(String.class));
         verify(dataSourceMapper, times(1)).selectById(1L);
+    }
+
+    @Test
+    @DisplayName("启用数据源 - 主机被 SSRF 校验拒绝时抛异常且不创建客户端")
+    void enableDataSource_BlockedHost_ThrowsIllegalArgumentException() throws Exception {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MySQL", "testdb");
+        ds.setHost("127.0.0.1");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(hostSecurityValidator.isBlocked("127.0.0.1")).thenReturn(true);
+
+        assertThatThrownBy(() -> manager.enableDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Host not allowed");
+
+        verify(hostSecurityValidator).isBlocked("127.0.0.1");
+        verify(jdbcFactory, never()).createClient(anyString(), anyInt(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("启用 Elasticsearch - 使用解密后的密码和 API Key 创建客户端")
+    void enable_Elasticsearch_CreatesClientWithDecryptedCredentials() throws Exception {
+        DataSource ds = new DataSource();
+        ds.setId(1L);
+        ds.setName("es-ds");
+        ds.setType("Elasticsearch");
+        ds.setHost("localhost");
+        ds.setPort(9200);
+        ds.setDatabaseName("");
+        ds.setUsername("es-user");
+        ds.setPassword("encrypted-es-password");
+        ds.setApiKey("api-key-from-db");
+        ds.setStatus("ENABLED");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(factoryRegistry.<ElasticsearchClient>getFactory("Elasticsearch")).thenReturn(esFactory);
+        when(esFactory.createClient(eq("localhost"), eq(9200), eq(""), eq("es-user"),
+                eq("plain-password"), eq("api-key-from-db"))).thenReturn(esClient);
+        when(applicationContext.getBeanFactory()).thenReturn(beanFactory);
+
+        manager.enableDataSource(1L);
+
+        verify(esFactory).createClient("localhost", 9200, "", "es-user", "plain-password", "api-key-from-db");
+        verify(beanFactory).registerSingleton("datasource_1", esClient);
+    }
+
+    @Test
+    @DisplayName("获取 DataSource - 主机被 SSRF 校验拒绝时抛异常且不创建客户端")
+    void getDataSource_BlockedHost_ThrowsIllegalArgumentException() throws Exception {
+        DataSource ds = jdbcDataSourceEntity("ENABLED", "MySQL", "testdb");
+        ds.setHost("127.0.0.1");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+        when(hostSecurityValidator.isBlocked("127.0.0.1")).thenReturn(true);
+
+        assertThatThrownBy(() -> manager.getDataSource(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Host not allowed");
+
+        verify(hostSecurityValidator).isBlocked("127.0.0.1");
+        verify(jdbcFactory, never()).createClient(anyString(), anyInt(), any(), any(), any(), any());
     }
 
     @Test

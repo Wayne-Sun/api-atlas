@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -175,6 +176,16 @@ public class ApiInterfaceService implements DataSourceEventPublisher {
 
     /**
      * Execute an interface test: resolve executor by queryType, run query, return result.
+     * <p>
+     * Before dispatch, each declared {@code interface_param} value is coerced to
+     * its declared {@code javaType} so that non-String parameters reach the
+     * executor as typed values (Integer/Long/Double/Boolean) instead of raw
+     * strings, and mismatched input fails fast with a 400-able
+     * {@link IllegalArgumentException}. NOTE: {@link ParamExtractor} currently
+     * hardcodes {@code javaType="String"} and there is no param-type editing
+     * endpoint, so the non-String branches are unreachable in production today —
+     * the coercion is implemented and tested regardless (unit-level, constructing
+     * {@link InterfaceParam} with a non-String javaType directly).
      */
     @Transactional(readOnly = true)
     public QueryResult testInterface(Long id, Map<String, Object> params, int pageNum, int pageSize) {
@@ -188,25 +199,78 @@ public class ApiInterfaceService implements DataSourceEventPublisher {
             throw new IllegalStateException("Interface is offline: " + id);
         }
 
+        List<InterfaceParam> declaredParams = paramMapper.selectByInterfaceId(id);
+        Map<String, Object> coercedParams = coerceParams(declaredParams, params);
+
         Long dsId = iface.getDataSourceId();
         String queryType = iface.getQueryType();
         String queryContent = iface.getQueryContent();
 
         switch (queryType) {
             case "SQL":
-                return databaseQueryExecutor.executeSql(dsId, queryContent, params, pageNum, pageSize);
+                return databaseQueryExecutor.executeSql(dsId, queryContent, coercedParams, pageNum, pageSize);
             case "IBATIS":
-                return databaseQueryExecutor.executeIbatis(dsId, queryContent, params, pageNum, pageSize);
+                return databaseQueryExecutor.executeIbatis(dsId, queryContent, coercedParams, pageNum, pageSize);
             case "ESQL":
-                return esQueryExecutor.executeEsql(dsId, queryContent, params, pageNum, pageSize);
+                return esQueryExecutor.executeEsql(dsId, queryContent, coercedParams, pageNum, pageSize);
             case "QUERY_DSL":
-                return esQueryExecutor.executeQueryDsl(dsId, queryContent, params, pageNum, pageSize);
+                return esQueryExecutor.executeQueryDsl(dsId, queryContent, coercedParams, pageNum, pageSize);
             case "MONGO_FIND":
-                return mongoQueryExecutor.executeFind(dsId, queryContent, params, pageNum, pageSize);
+                return mongoQueryExecutor.executeFind(dsId, queryContent, coercedParams, pageNum, pageSize);
             case "MONGO_AGG":
-                return mongoQueryExecutor.executeAggregate(dsId, queryContent, params, pageNum, pageSize);
+                return mongoQueryExecutor.executeAggregate(dsId, queryContent, coercedParams, pageNum, pageSize);
             default:
                 throw new IllegalArgumentException("Unsupported query type: " + queryType);
+        }
+    }
+
+    /**
+     * Coerce each declared param that is present in the incoming map to its
+     * declared {@code javaType}. Values for undeclared keys and {@code String}
+     * (or null) javaTypes pass through unchanged; a null/empty declaration list
+     * returns the original map untouched.
+     *
+     * @throws IllegalArgumentException on unknown javaType or parse failure with
+     *                                  the message pattern
+     *                                  {@code Invalid type for param {name}: expected {javaType}}
+     */
+    private Map<String, Object> coerceParams(List<InterfaceParam> declaredParams, Map<String, Object> params) {
+        if (declaredParams == null || declaredParams.isEmpty() || params == null || params.isEmpty()) {
+            return params;
+        }
+        Map<String, Object> coerced = new HashMap<>(params);
+        for (InterfaceParam declared : declaredParams) {
+            String name = declared.getParamName();
+            if (name == null || !coerced.containsKey(name)) {
+                continue;
+            }
+            coerced.put(name, coerceValue(name, declared.getJavaType(), coerced.get(name)));
+        }
+        return coerced;
+    }
+
+    /**
+     * Coerce a single value to the declared javaType. {@code String} (the type
+     * currently produced by {@link ParamExtractor}) is the identity — no
+     * conversion, preserving today's exact executor input. Unknown javaTypes are
+     * rejected rather than silently passed through.
+     */
+    private Object coerceValue(String name, String javaType, Object value) {
+        if (javaType == null || "String".equals(javaType)) {
+            return value;
+        }
+        try {
+            return switch (javaType) {
+                case "Integer" -> Integer.parseInt(String.valueOf(value));
+                case "Long" -> Long.parseLong(String.valueOf(value));
+                case "Double" -> Double.parseDouble(String.valueOf(value));
+                case "Boolean" -> Boolean.parseBoolean(String.valueOf(value));
+                default -> throw new IllegalArgumentException(
+                        "Invalid type for param " + name + ": expected " + javaType);
+            };
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException(
+                    "Invalid type for param " + name + ": expected " + javaType);
         }
     }
 

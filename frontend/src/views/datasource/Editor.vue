@@ -34,6 +34,12 @@ const form = ref({
 
 const isElasticsearch = computed(() => form.value.type === 'Elasticsearch')
 
+// Credentials are never returned by the API (security: F3) — in edit mode they stay
+// blank and a blank value on save means "keep unchanged" on the backend.
+const credentialPlaceholder = computed(() =>
+  isEdit.value ? '已加密，留空则不修改' : isElasticsearch.value ? '请输入 API Key' : '请输入密码'
+)
+
 // Only flip the default MySQL port (3306) when switching to MongoDB/Doris — never clobber a user-customized port
 watch(
   () => form.value.type,
@@ -64,8 +70,8 @@ onMounted(async () => {
           port: data.port,
           databaseName: data.databaseName ?? '',
           username: data.username ?? '',
-          password: data.password ?? '',
-          apiKey: data.apiKey ?? ''
+          password: '',
+          apiKey: ''
         }
       }
     } catch (e) {
@@ -150,10 +156,10 @@ function handleCancel() {
         <NInput v-model:value="form.username" placeholder="用户名" />
       </NFormItem>
       <NFormItem v-if="!isElasticsearch" label="密码" path="password">
-        <NInput v-model:value="form.password" type="password" placeholder="密码" />
+        <NInput v-model:value="form.password" type="password" :placeholder="credentialPlaceholder" />
       </NFormItem>
       <NFormItem v-if="isElasticsearch" label="API Key" path="apiKey">
-        <NInput v-model:value="form.apiKey" placeholder="Elasticsearch API Key" />
+        <NInput v-model:value="form.apiKey" :placeholder="credentialPlaceholder" />
       </NFormItem>
       <NSpace justify="center" style="margin-top: 24px;">
         <NButton @click="handleTestConnection" :loading="testLoading">测试连接</NButton>

@@ -8,6 +8,8 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -38,6 +40,8 @@ import java.util.stream.StreamSupport;
  */
 @Component
 public class MongoQueryExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(MongoQueryExecutor.class);
 
     /** Matches a text node that consists of exactly one {@code ${name}} placeholder. */
     private static final Pattern EXACT_PARAM_PATTERN = Pattern.compile("^\\$\\{(\\w+)\\}$");
@@ -119,8 +123,9 @@ public class MongoQueryExecutor {
             }
             return buildResult(rows, total, pageNum, pageSize, start);
         } catch (MongoException e) {
+            log.warn("MongoDB execution failed for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "MongoDB execution failed for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "MongoDB execution failed for datasource " + datasourceId, e);
         }
     }
 
@@ -214,8 +219,9 @@ public class MongoQueryExecutor {
             }
             return buildResult(rows, total, pageNum, pageSize, start);
         } catch (MongoException e) {
+            log.warn("MongoDB execution failed for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "MongoDB execution failed for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "MongoDB execution failed for datasource " + datasourceId, e);
         }
     }
 

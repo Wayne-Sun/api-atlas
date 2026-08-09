@@ -36,12 +36,14 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'create',
         name: 'DatasourceCreate',
-        component: () => import('@/views/datasource/Editor.vue')
+        component: () => import('@/views/datasource/Editor.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'edit/:id',
         name: 'DatasourceEdit',
-        component: () => import('@/views/datasource/Editor.vue')
+        component: () => import('@/views/datasource/Editor.vue'),
+        meta: { requiresAdmin: true }
       }
     ]
   },
@@ -57,17 +59,20 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'create',
         name: 'InterfaceCreate',
-        component: () => import('@/views/interface/Editor.vue')
+        component: () => import('@/views/interface/Editor.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'edit/:id',
         name: 'InterfaceEdit',
-        component: () => import('@/views/interface/Editor.vue')
+        component: () => import('@/views/interface/Editor.vue'),
+        meta: { requiresAdmin: true }
       },
       {
         path: 'test/:id',
         name: 'InterfaceTest',
-        component: () => import('@/views/interface/TestView.vue')
+        component: () => import('@/views/interface/TestView.vue'),
+        meta: { requiresAdmin: true }
       }
     ]
   },

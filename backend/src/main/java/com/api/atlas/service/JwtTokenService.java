@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -48,6 +49,7 @@ public class JwtTokenService {
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(username)
                 .issuer("api-atlas")
+                .audience(List.of("api-atlas"))
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(accessTokenExpiration))
                 .id(UUID.randomUUID().toString())
@@ -62,6 +64,8 @@ public class JwtTokenService {
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .subject(username)
+                .issuer("api-atlas")
+                .audience(List.of("api-atlas"))
                 .issuedAt(now)
                 .expiresAt(now.plusSeconds(refreshTokenExpiration))
                 .id(UUID.randomUUID().toString())

@@ -62,10 +62,11 @@ public class AuthController {
                     .body(R.error(401, "Invalid username or password"));
         }
 
-        // Check if account is disabled
+        // Check if account is disabled — respond with the SAME generic body as other
+        // failure branches to prevent account-status enumeration (timing unchanged).
         if ("DISABLED".equals(user.getStatus())) {
             return ResponseEntity.status(401)
-                    .body(R.error(401, "Account disabled"));
+                    .body(R.error(401, "Invalid username or password"));
         }
 
         // Verify password

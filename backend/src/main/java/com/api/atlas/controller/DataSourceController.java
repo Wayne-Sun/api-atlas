@@ -1,6 +1,7 @@
 package com.api.atlas.controller;
 
 import com.api.atlas.config.DataSourceFactoryRegistry;
+import com.api.atlas.config.HostSecurityValidator;
 import com.api.atlas.model.DataSource;
 import com.api.atlas.model.DataSourceCreateDTO;
 import com.api.atlas.model.DataSourceUpdateDTO;
@@ -11,11 +12,14 @@ import com.zaxxer.hikari.HikariDataSource;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import com.mongodb.client.MongoClient;
 import org.bson.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,12 +42,17 @@ import java.util.Map;
 @RequestMapping("/api/datasources")
 public class DataSourceController {
 
+    private static final Logger log = LoggerFactory.getLogger(DataSourceController.class);
+
     private final DataSourceService dataSourceService;
     private final DataSourceFactoryRegistry factoryRegistry;
+    private final HostSecurityValidator hostSecurityValidator;
 
-    public DataSourceController(DataSourceService dataSourceService, DataSourceFactoryRegistry factoryRegistry) {
+    public DataSourceController(DataSourceService dataSourceService, DataSourceFactoryRegistry factoryRegistry,
+                                HostSecurityValidator hostSecurityValidator) {
         this.dataSourceService = dataSourceService;
         this.factoryRegistry = factoryRegistry;
+        this.hostSecurityValidator = hostSecurityValidator;
     }
 
     public static class TestConnectionRequest {
@@ -116,6 +125,7 @@ public class DataSourceController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public R<DataSource> create(@Valid @RequestBody DataSourceCreateDTO dto) {
         DataSource dataSource = dataSourceService.create(dto);
         return R.created(dataSource);
@@ -138,26 +148,37 @@ public class DataSourceController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public R<DataSource> update(@PathVariable Long id, @Valid @RequestBody DataSourceUpdateDTO dto) {
         return R.ok(dataSourceService.update(id, dto));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         dataSourceService.delete(id);
         return R.deleted();
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
     public R<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         dataSourceService.updateStatus(id, body.get("status"));
         return R.ok(null);
     }
 
     @PostMapping("/test-connection")
+    @PreAuthorize("hasRole('ADMIN')")
     public R<Map<String, Object>> testConnection(@Valid @RequestBody TestConnectionRequest req) {
         long start = System.currentTimeMillis();
         Map<String, Object> result = new HashMap<>();
+        if (hostSecurityValidator.isBlocked(req.getHost())) {
+            long elapsed = System.currentTimeMillis() - start;
+            result.put("connected", false);
+            result.put("responseTime", (int) elapsed);
+            result.put("error", "Host not allowed");
+            return R.ok(result);
+        }
         try {
             if ("Elasticsearch".equals(req.getType())) {
                 ElasticsearchClient client = (ElasticsearchClient) factoryRegistry.getFactory("Elasticsearch")
@@ -199,7 +220,9 @@ public class DataSourceController {
             long elapsed = System.currentTimeMillis() - start;
             result.put("connected", false);
             result.put("responseTime", (int) elapsed);
-            result.put("error", e.getMessage());
+            // Generic, HTTP-visible error — full detail goes to the WARN log only.
+            result.put("error", "Connection failed");
+            log.warn("Connection test failed for type {}: {}", req.getType(), e.getMessage(), e);
         }
         return R.ok(result);
     }

@@ -59,8 +59,15 @@ const stubs = {
     },
   },
   NInput: {
-    setup() {
-      return () => h('input')
+    name: 'NInput',
+    props: ['value', 'placeholder'],
+    setup(props: any, { emit }: any) {
+      return () =>
+        h('input', {
+          value: props.value,
+          placeholder: props.placeholder,
+          onInput: (e: Event) => emit('update:value', (e.target as HTMLInputElement).value),
+        })
     },
   },
   NInputNumber: {
@@ -287,6 +294,39 @@ describe('Editor.vue', () => {
     // Still exactly 1 number input (port) and 1 select (type)
     expect(wrapper.findAll('input[type="number"]').length).toBe(1)
     expect(wrapper.findAll('select').length).toBe(1)
+    wrapper.unmount()
+  })
+
+  it('edit mode - does not prefill password/apiKey and shows encrypted placeholder', async () => {
+    mockStore.current = {
+      id: 1,
+      name: 'test',
+      type: 'Elasticsearch',
+      host: 'es-host',
+      port: 9200,
+      databaseName: '',
+      username: '',
+      password: 'encrypted-cipher',
+      apiKey: 'leaked-api-key',
+      status: 'ENABLED',
+      createdAt: '',
+      updatedAt: '',
+    }
+    mockValidate.mockResolvedValue(true)
+    mockStore.update.mockResolvedValue({ data: {} })
+    const wrapper = createWrapper({ id: '1' })
+    await flushPromises()
+
+    // placeholder advertises that a blank value keeps the stored credential
+    const apiKeyInput = wrapper.findAll('input').find((i) => i.attributes('placeholder') === '已加密，留空则不修改')
+    expect(apiKeyInput?.exists()).toBe(true)
+
+    const saveButton = wrapper.findAll('button').find((b) => b.text() === '保存')!
+    await saveButton.trigger('click')
+    await flushPromises()
+
+    // the form submits blank credentials — the backend treats blank as "keep unchanged"
+    expect(mockStore.update).toHaveBeenCalledWith(1, expect.objectContaining({ password: '', apiKey: '' }))
     wrapper.unmount()
   })
 })

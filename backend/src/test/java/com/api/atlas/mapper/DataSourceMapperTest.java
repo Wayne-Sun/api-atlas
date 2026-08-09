@@ -68,6 +68,22 @@ class DataSourceMapperTest {
     }
 
     @Test
+    @DisplayName("查询全部 - 返回包含 password 列的完整数据")
+    void selectAll_ReturnsPasswordColumn() {
+        DataSource ds = createTestDataSource();
+        ds.setPassword("encrypted-password-value");
+        dataSourceMapper.insert(ds);
+
+        List<DataSource> list = dataSourceMapper.selectAll();
+        assertThat(list).isNotEmpty();
+        DataSource found = list.stream()
+                .filter(d -> d.getId().equals(ds.getId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(found.getPassword()).isEqualTo("encrypted-password-value");
+    }
+
+    @Test
     @DisplayName("更新数据源 - 字段正确更新")
     void updateById_ValidData_UpdatesFields() {
         DataSource ds = createTestDataSource();

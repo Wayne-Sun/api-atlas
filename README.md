@@ -68,7 +68,7 @@ SPRING_DATASOURCE_PASSWORD=your_password mvn spring-boot:run
 
 The server starts at `http://localhost:8080`. On first startup it automatically:
 1. Initializes the database schema (`schema.sql`)
-2. Creates a default admin user (credentials logged as a warning)
+2. Creates a default admin user (password configured via `atlas.admin.default-password` — no password is logged)
 
 ### Frontend
 
@@ -147,6 +147,9 @@ cd frontend && npm test             # Run tests (watch)
 | `atlas.encryption.secret-key` | `CHANGE_ME_*` | AES-256 key (Base64, 32 bytes) |
 | `atlas.jwt.private-key` | `CHANGE_ME_*` | RSA private key (PEM) |
 | `atlas.jwt.public-key` | `CHANGE_ME_*` | RSA public key (PEM) |
+| `atlas.security.redis-fail-closed` | `true` | Fail closed (503) when Redis is unavailable during token validation; set `false` for fail-open |
+| `atlas.security.allow-private-hosts` | `false` | Allow loopback/private/link-local hosts in datasource connections (SSRF guard bypass) |
+| `atlas.executor.query-timeout-seconds` | `30` | JDBC + IBATIS statement timeout (seconds) |
 | `atlas.executor.ibatis.max-memory-rows` | `100000` | IBATIS in-memory pagination limit |
 | `atlas.mongodb.*` | `5000 / 5000 / 60000` | MongoDB client timeouts (connect / server-selection / socket, ms) |
 
@@ -176,7 +179,7 @@ atlas:
 
 | Username | Password | Role |
 |----------|----------|------|
-| `admin` | Random UUID (logged at first startup) | `ADMIN` |
+| `admin` | Random UUID (generated, not logged) | `ADMIN` |
 
 Configure a custom password via `atlas.admin.default-password` in `application-local.yml`.
 

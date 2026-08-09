@@ -1,6 +1,7 @@
 package com.api.atlas.config;
 
 import com.api.atlas.service.RedisTokenService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -9,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -28,10 +30,14 @@ public class SecurityConfig {
 
     private final RSAPublicKey publicKey;
     private final RedisTokenService redisTokenService;
+    private final boolean redisFailClosed;
 
-    public SecurityConfig(RSAPublicKey publicKey, RedisTokenService redisTokenService) {
+    public SecurityConfig(RSAPublicKey publicKey,
+                          RedisTokenService redisTokenService,
+                          @Value("${atlas.security.redis-fail-closed:true}") boolean redisFailClosed) {
         this.publicKey = publicKey;
         this.redisTokenService = redisTokenService;
+        this.redisFailClosed = redisFailClosed;
     }
 
     @Bean
@@ -48,14 +54,21 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
                 .decoder(jwtDecoder())
                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))
-            .addFilterAfter(new TokenValidationFilter(redisTokenService), BasicAuthenticationFilter.class);
+            .addFilterAfter(new TokenValidationFilter(redisTokenService, redisFailClosed), BasicAuthenticationFilter.class);
 
         return http.build();
     }
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withPublicKey(publicKey).build();
+        // Enforce issuer ("api-atlas") plus standard claims (exp, nbf) on every
+        // incoming JWT via the default validator. The `aud` claim is carried on
+        // generated tokens for introspection/documentation purposes but is NOT
+        // enforced here — audience validation would require a custom
+        // OAuth2TokenValidator<Jwt>, which is intentionally out of scope.
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(publicKey).build();
+        decoder.setJwtValidator(JwtValidators.createDefaultWithIssuer("api-atlas"));
+        return decoder;
     }
 
     @Bean

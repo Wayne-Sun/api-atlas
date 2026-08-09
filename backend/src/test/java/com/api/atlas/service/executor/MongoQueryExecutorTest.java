@@ -226,11 +226,13 @@ class MongoQueryExecutorTest {
                         "{\"collection\":\"orders\",\"pipeline\":[{\"$match\":{\"a\":1}},{\"$out\":\"backup\"}]}",
                         Collections.emptyMap(), 1, 10));
         assertTrue(outEx.getMessage().contains("$out"));
+        assertTrue(outEx.getMessage().contains("read-only"));
 
         IllegalArgumentException mergeEx = assertThrows(IllegalArgumentException.class,
                 () -> executor.executeAggregate(id,
                         "{\"collection\":\"orders\",\"pipeline\":[{\"$merge\":{\"into\":\"x\"}}]}",
                         Collections.emptyMap(), 1, 10));
         assertTrue(mergeEx.getMessage().contains("$merge"));
+        assertTrue(mergeEx.getMessage().contains("read-only"));
     }
 }

@@ -56,8 +56,8 @@ class DataSourceServiceTest {
     }
 
     @Test
-    @DisplayName("创建数据源 - 返回带加密密码的数据源")
-    void create_ValidDTO_ReturnsDataSourceWithEncryptedPassword() {
+    @DisplayName("创建数据源 - 响应中密码/API Key 为空，但 Mapper 收到加密密文")
+    void create_ReturnsNullCredentials() {
         DataSourceCreateDTO dto = new DataSourceCreateDTO();
         dto.setName("test-ds");
         dto.setType("MySQL");
@@ -68,8 +68,14 @@ class DataSourceServiceTest {
         dto.setPassword("raw-password");
         dto.setApiKey("test-api-key");
 
+        // Snapshot values the mapper receives — the returned entity is the SAME reference
+        // that the service nulls after insert, so capture inside the answer.
+        String[] persistedPassword = new String[1];
+        String[] persistedApiKey = new String[1];
         when(dataSourceMapper.insert(any(DataSource.class))).thenAnswer(invocation -> {
             DataSource ds = invocation.getArgument(0);
+            persistedPassword[0] = ds.getPassword();
+            persistedApiKey[0] = ds.getApiKey();
             ds.setId(1L);
             return 1;
         });
@@ -83,14 +89,35 @@ class DataSourceServiceTest {
         assertThat(result.getPort()).isEqualTo(3306);
         assertThat(result.getDatabaseName()).isEqualTo("testdb");
         assertThat(result.getUsername()).isEqualTo("test-user");
-        assertThat(result.getPassword()).isEqualTo("encrypted:test-password");
-        assertThat(result.getApiKey()).isEqualTo("test-api-key");
+        assertThat(result.getPassword()).isNull();
+        assertThat(result.getApiKey()).isNull();
         assertThat(result.getStatus()).isEqualTo("ENABLED");
+
+        assertThat(persistedPassword[0]).isEqualTo("encrypted:test-password");
+        assertThat(persistedApiKey[0]).isEqualTo("test-api-key");
 
         // createdAt and updatedAt are now set by AuditInterceptor (MyBatis plugin)
         // — no longer set manually in the service layer
 
         encryptionUtil.verify(() -> EncryptionUtil.encrypt("raw-password", secretKey));
+    }
+
+    @Test
+    @DisplayName("按 ID 查询 - 响应中密码和 API Key 均为空（不返回解密值）")
+    void getById_ReturnsPasswordAndApiKeyNull() {
+        DataSource ds = new DataSource();
+        ds.setId(1L);
+        ds.setName("test-ds");
+        ds.setPassword("encrypted:cipher");
+        ds.setApiKey("api-key-from-db");
+        when(dataSourceMapper.selectById(1L)).thenReturn(ds);
+
+        DataSource result = dataSourceService.getById(1L);
+
+        assertThat(result).isSameAs(ds);
+        assertThat(result.getName()).isEqualTo("test-ds");
+        assertThat(result.getPassword()).isNull();
+        assertThat(result.getApiKey()).isNull();
     }
 
     @Test
@@ -173,6 +200,64 @@ class DataSourceServiceTest {
         assertThatThrownBy(() -> dataSourceService.update(9999L, dto))
             .isInstanceOf(NoSuchElementException.class)
             .hasMessageContaining("9999");
+    }
+
+    @Test
+    @DisplayName("更新数据源 - 空白密码/API Key 表示不修改，保留原密文")
+    void update_BlankPassword_KeepsExistingCiphertext() {
+        DataSource existing = new DataSource();
+        existing.setId(1L);
+        existing.setName("test-ds");
+        existing.setPassword("ciphertext-original");
+        existing.setApiKey("original-api-key");
+
+        DataSource afterDb = new DataSource();
+        afterDb.setId(1L);
+        afterDb.setName("test-ds");
+        afterDb.setPassword("ciphertext-original");
+        afterDb.setApiKey("original-api-key");
+
+        DataSourceUpdateDTO dto = new DataSourceUpdateDTO();
+        dto.setName("new-name");
+        dto.setPassword("   ");
+        dto.setApiKey(" ");
+
+        when(dataSourceMapper.selectById(1L)).thenReturn(existing, afterDb);
+        when(dataSourceMapper.updateById(any(DataSource.class))).thenReturn(1);
+
+        dataSourceService.update(1L, dto);
+
+        ArgumentCaptor<DataSource> captor = ArgumentCaptor.forClass(DataSource.class);
+        verify(dataSourceMapper).updateById(captor.capture());
+        assertThat(captor.getValue().getPassword()).isEqualTo("ciphertext-original");
+        assertThat(captor.getValue().getApiKey()).isEqualTo("original-api-key");
+    }
+
+    @Test
+    @DisplayName("更新数据源 - 响应中密码和 API Key 均为空")
+    void update_ReturnsNullCredentials() {
+        DataSource existing = new DataSource();
+        existing.setId(1L);
+        existing.setName("test-ds");
+        existing.setPassword("ciphertext-original");
+
+        DataSource afterDb = new DataSource();
+        afterDb.setId(1L);
+        afterDb.setName("updated-name");
+        afterDb.setPassword("ciphertext-original");
+        afterDb.setApiKey("api-key-in-db");
+
+        DataSourceUpdateDTO dto = new DataSourceUpdateDTO();
+        dto.setName("updated-name");
+
+        when(dataSourceMapper.selectById(1L)).thenReturn(existing, afterDb);
+        when(dataSourceMapper.updateById(any(DataSource.class))).thenReturn(1);
+
+        DataSource result = dataSourceService.update(1L, dto);
+
+        assertThat(result.getName()).isEqualTo("updated-name");
+        assertThat(result.getPassword()).isNull();
+        assertThat(result.getApiKey()).isNull();
     }
 
     @Test

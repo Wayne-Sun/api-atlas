@@ -12,6 +12,8 @@ import jakarta.json.JsonValue;
 import org.elasticsearch.client.Request;
 import org.elasticsearch.client.Response;
 import org.elasticsearch.client.RestClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -33,6 +35,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class ElasticsearchQueryExecutor {
+
+    private static final Logger log = LoggerFactory.getLogger(ElasticsearchQueryExecutor.class);
 
     private static final Pattern PARAM_PATTERN = Pattern.compile("\\$\\{(\\w+)\\}");
 
@@ -71,8 +75,9 @@ public class ElasticsearchQueryExecutor {
                     .query(preparedEsql)
                     .params(paramMap));
         } catch (IOException e) {
+            log.warn("ES|QL execution failed for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "ES|QL execution failed for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "ES|QL execution failed for datasource " + datasourceId, e);
         }
 
         // Parse response: columns + rows into List<Map<String, Object>>
@@ -107,8 +112,9 @@ public class ElasticsearchQueryExecutor {
         try {
             root = objectMapper.readTree(queryContent);
         } catch (JacksonException e) {
+            log.warn("Invalid Query DSL JSON for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new IllegalArgumentException(
-                    "Invalid Query DSL JSON for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "Invalid Query DSL JSON for datasource " + datasourceId, e);
         }
 
         if (root instanceof ObjectNode objectNode) {
@@ -137,16 +143,18 @@ public class ElasticsearchQueryExecutor {
         try {
             request.setJsonEntity(objectMapper.writeValueAsString(root));
         } catch (JacksonException e) {
+            log.warn("Failed to serialize request JSON for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "Failed to serialize request JSON for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "Failed to serialize request JSON for datasource " + datasourceId, e);
         }
 
         Response response;
         try {
             response = restClient.performRequest(request);
         } catch (IOException e) {
+            log.warn("Query DSL execution failed for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "Query DSL execution failed for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "Query DSL execution failed for datasource " + datasourceId, e);
         }
 
         // 5. Parse response
@@ -154,8 +162,9 @@ public class ElasticsearchQueryExecutor {
         try (InputStream body = response.getEntity().getContent()) {
             resultJson = objectMapper.readTree(body);
         } catch (IOException e) {
+            log.warn("Failed to parse Query DSL response for datasource {}: {}", datasourceId, e.getMessage(), e);
             throw new RuntimeException(
-                    "Failed to parse Query DSL response for datasource " + datasourceId + ": " + e.getMessage(), e);
+                    "Failed to parse Query DSL response for datasource " + datasourceId, e);
         }
 
         // 6. Extract hits

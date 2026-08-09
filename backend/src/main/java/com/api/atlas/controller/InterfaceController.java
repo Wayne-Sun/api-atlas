@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -37,6 +38,7 @@ public class InterfaceController {
         this.apiInterfaceService = apiInterfaceService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public R<ApiInterface> create(@Valid @RequestBody ApiInterfaceCreateDTO dto) {
         return R.created(apiInterfaceService.create(dto));
@@ -58,17 +60,20 @@ public class InterfaceController {
         return R.ok(apiInterfaceService.getById(id));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{id}")
     public R<ApiInterface> update(@PathVariable Long id, @Valid @RequestBody ApiInterfaceUpdateDTO dto) {
         return R.ok(apiInterfaceService.update(id, dto));
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         apiInterfaceService.delete(id);
         return R.deleted();
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/{id}/test")
     public R<QueryResult> test(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
@@ -79,6 +84,7 @@ public class InterfaceController {
         return R.ok(result);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @PatchMapping("/{id}/status")
     public R<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
         apiInterfaceService.updateStatus(id, body.get("status"));

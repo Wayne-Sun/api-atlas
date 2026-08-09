@@ -20,6 +20,15 @@ public class EncryptionConfig {
         if ("CHANGE_ME_PLEASE_REPLACE_WITH_BASE64_32_BYTE_KEY".equals(secretKey)) {
             throw new IllegalStateException("atlas.encryption.secret-key must be changed from default");
         }
+        byte[] decoded;
+        try {
+            decoded = Base64.getDecoder().decode(secretKey);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("atlas.encryption.secret-key must be a valid Base64 32-byte key", e);
+        }
+        if (decoded.length != 32) {
+            throw new IllegalStateException("atlas.encryption.secret-key must be a valid Base64 32-byte key");
+        }
     }
 
     @Bean

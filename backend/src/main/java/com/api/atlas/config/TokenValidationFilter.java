@@ -18,16 +18,19 @@ import java.io.IOException;
 /**
  * Validates that the JWT token's jti (token ID) still exists in Redis.
  * If the token has been revoked (removed from Redis), the request is rejected.
- * Falls back to allowing the request through if Redis is unavailable.
+ * If Redis is unavailable, behavior is configurable:
+ * fail-closed (default) rejects the request with 503; fail-open allows it through (degraded).
  */
 public class TokenValidationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(TokenValidationFilter.class);
 
     private final RedisTokenService redisTokenService;
+    private final boolean failClosed;
 
-    public TokenValidationFilter(RedisTokenService redisTokenService) {
+    public TokenValidationFilter(RedisTokenService redisTokenService, boolean failClosed) {
         this.redisTokenService = redisTokenService;
+        this.failClosed = failClosed;
     }
 
     @Override
@@ -72,6 +75,13 @@ public class TokenValidationFilter extends OncePerRequestFilter {
                 return;
             }
         } catch (Exception e) {
+            if (failClosed) {
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().write("{\"code\":503,\"msg\":\"Token service unavailable\"}");
+                return;
+            }
             log.warn("Redis unavailable, allowing request through: {} - {}", path, e.getMessage());
             filterChain.doFilter(request, response);
             return;

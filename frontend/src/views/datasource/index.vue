@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { h, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDatasourceStore } from '@/stores/datasource'
 import type { DataSource } from '@/stores/datasource'
+import { useAuthStore } from '@/stores/auth'
 import { NButton, NDataTable, NTag, NSwitch, NSpace, NInput, NSelect, NEmpty, NCard, NPopconfirm, useMessage } from 'naive-ui'
 
 const router = useRouter()
 const store = useDatasourceStore()
+const authStore = useAuthStore()
 const message = useMessage()
 const searchName = ref('')
 const searchType = ref<string | null>(null)
@@ -22,37 +24,48 @@ const typeOptions = [
   { label: 'Doris', value: 'Doris' }
 ]
 
-const columns = [
-  { title: '名称', key: 'name' },
-  {
-    title: '类型',
-    key: 'type',
-    render: (row: DataSource) => h(NTag, {
-      type: row.type === 'MySQL' ? 'info' as const : row.type === 'PostgreSQL' ? 'success' as const : 'warning' as const
-    }, { default: () => row.type })
-  },
-  { title: '主机', key: 'host' },
-  { title: '端口', key: 'port' },
-  {
-    title: '状态',
-    key: 'status',
-    render: (row: DataSource) => h(NSwitch, {
-      value: row.status === 'ENABLED',
-      'onUpdate:value': () => handleToggle(row)
-    })
-  },
-  { title: '创建时间', key: 'createdAt' },
-  {
-    title: '操作',
-    key: 'actions',
-    render: (row: DataSource) => h(NSpace, null, {
-      default: () => [
-        h(NButton, { size: 'small', onClick: () => router.push(`/datasource/edit/${row.id}`) }, { default: () => '编辑' }),
-        h(NPopconfirm, { onPositiveClick: () => handleDelete(row) }, { trigger: () => h(NButton, { size: 'small', type: 'error' as const, loading: deletingId.value === row.id }, { default: () => '删除' }), default: () => '确定删除？' })
-      ]
-    })
+const columns = computed(() => {
+  const baseColumns = [
+    { title: '名称', key: 'name' },
+    {
+      title: '类型',
+      key: 'type',
+      render: (row: DataSource) => h(NTag, {
+        type: row.type === 'MySQL' ? 'info' as const : row.type === 'PostgreSQL' ? 'success' as const : 'warning' as const
+      }, { default: () => row.type })
+    },
+    { title: '主机', key: 'host' },
+    { title: '端口', key: 'port' }
+  ]
+
+  if (authStore.isAdmin) {
+    baseColumns.push(
+      {
+        title: '状态',
+        key: 'status',
+        render: (row: DataSource) => h(NSwitch, {
+          value: row.status === 'ENABLED',
+          'onUpdate:value': () => handleToggle(row)
+        })
+      },
+      { title: '创建时间', key: 'createdAt' },
+      {
+        title: '操作',
+        key: 'actions',
+        render: (row: DataSource) => h(NSpace, null, {
+          default: () => [
+            h(NButton, { size: 'small', onClick: () => router.push(`/datasource/edit/${row.id}`) }, { default: () => '编辑' }),
+            h(NPopconfirm, { onPositiveClick: () => handleDelete(row) }, { trigger: () => h(NButton, { size: 'small', type: 'error' as const, loading: deletingId.value === row.id }, { default: () => '删除' }), default: () => '确定删除？' })
+          ]
+        })
+      }
+    )
+  } else {
+    baseColumns.push({ title: '创建时间', key: 'createdAt' })
   }
-]
+
+  return baseColumns
+})
 
 async function handleToggle(row: DataSource) {
   try {
@@ -98,7 +111,7 @@ onMounted(fetchData)
 <template>
   <NCard title="数据源管理">
     <template #header-extra>
-      <NButton type="primary" @click="router.push('/datasource/create')">新增数据源</NButton>
+      <NButton v-if="authStore.isAdmin" type="primary" @click="router.push('/datasource/create')">新增数据源</NButton>
     </template>
     <NSpace style="margin-bottom: 16px;">
       <NInput v-model:value="searchName" placeholder="搜索名称" clearable style="width: 200px" />

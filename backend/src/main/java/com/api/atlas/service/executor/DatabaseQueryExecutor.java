@@ -2,18 +2,21 @@ package com.api.atlas.service.executor;
 
 import com.api.atlas.service.DataSourceClientManager;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.ResultContext;
+import org.apache.ibatis.session.ResultHandler;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.io.ByteArrayInputStream;
@@ -28,9 +31,9 @@ import java.util.regex.Pattern;
 @Component
 public class DatabaseQueryExecutor {
 
-    private static final Pattern PARAM_PATTERN = Pattern.compile("\\$\\{(\\w+)\\}");
-
     private static final Logger log = LoggerFactory.getLogger(DatabaseQueryExecutor.class);
+
+    private static final Pattern PARAM_PATTERN = Pattern.compile("\\$\\{(\\w+)\\}");
 
     @Value("${atlas.executor.ibatis.max-memory-rows:100000}")
     private int maxMemoryRows;
@@ -43,8 +46,12 @@ public class DatabaseQueryExecutor {
 
     private final DataSourceClientManager clientManager;
 
-    public DatabaseQueryExecutor(DataSourceClientManager clientManager) {
+    private final int queryTimeoutSeconds;
+
+    public DatabaseQueryExecutor(DataSourceClientManager clientManager,
+                                 @Value("${atlas.executor.query-timeout-seconds:30}") int queryTimeoutSeconds) {
         this.clientManager = clientManager;
+        this.queryTimeoutSeconds = queryTimeoutSeconds;
     }
 
     /**
@@ -95,6 +102,7 @@ public class DatabaseQueryExecutor {
         return jdbcTemplateCache.computeIfAbsent(datasourceId, id -> {
             String type = clientManager.getDataSourceType(id);
             JdbcTemplate jt = new JdbcTemplate(clientManager.getDataSource(id));
+            jt.setQueryTimeout(queryTimeoutSeconds);
             return new JdbcTemplateHolder(jt, "Doris".equals(type));
         });
     }
@@ -116,33 +124,39 @@ public class DatabaseQueryExecutor {
         String preparedSql = replacePlaceholders(queryContent, paramNames);
         Object[] paramValues = buildParamValues(paramNames, params);
 
-        if (pageNum > 0 && pageSize > 0) {
-            // Paginated: COUNT(*) + LIMIT/OFFSET (Doris uses LIMIT ?, ?)
-            String countSql = "SELECT COUNT(*) FROM (" + preparedSql + ") AS total";
-            Long total = jt.queryForObject(countSql, Long.class, paramValues);
+        try {
+            if (pageNum > 0 && pageSize > 0) {
+                // Paginated: COUNT(*) + LIMIT/OFFSET (Doris uses LIMIT ?, ?)
+                String countSql = "SELECT COUNT(*) FROM (" + preparedSql + ") AS total";
+                Long total = jt.queryForObject(countSql, Long.class, paramValues);
 
-            int offset = (pageNum - 1) * pageSize;
-            PageSql pageSql = buildPageSql(preparedSql, holder.dorisDialect(), offset, pageSize);
+                int offset = (pageNum - 1) * pageSize;
+                PageSql pageSql = buildPageSql(preparedSql, holder.dorisDialect(), offset, pageSize);
 
-            List<Map<String, Object>> rows = jt.queryForList(pageSql.sql(), pageSql.pageValues());
+                List<Map<String, Object>> rows = jt.queryForList(pageSql.sql(), pageSql.pageValues());
 
-            QueryResult result = new QueryResult();
-            result.setRows(rows);
-            result.setTotal(total != null ? total : 0);
-            result.setPageNum(pageNum);
-            result.setPageSize(pageSize);
-            result.setResponseTimeMs(System.currentTimeMillis() - start);
-            return result;
-        } else {
-            // Non-paginated: return all rows
-            List<Map<String, Object>> rows = jt.queryForList(preparedSql, paramValues);
-            QueryResult result = new QueryResult();
-            result.setRows(rows);
-            result.setTotal(rows.size());
-            result.setPageNum(1);
-            result.setPageSize(rows.size());
-            result.setResponseTimeMs(System.currentTimeMillis() - start);
-            return result;
+                QueryResult result = new QueryResult();
+                result.setRows(rows);
+                result.setTotal(total != null ? total : 0);
+                result.setPageNum(pageNum);
+                result.setPageSize(pageSize);
+                result.setResponseTimeMs(System.currentTimeMillis() - start);
+                return result;
+            } else {
+                // Non-paginated: return all rows
+                List<Map<String, Object>> rows = jt.queryForList(preparedSql, paramValues);
+                QueryResult result = new QueryResult();
+                result.setRows(rows);
+                result.setTotal(rows.size());
+                result.setPageNum(1);
+                result.setPageSize(rows.size());
+                result.setResponseTimeMs(System.currentTimeMillis() - start);
+                return result;
+            }
+        } catch (DataAccessException e) {
+            log.warn("SQL execution failed for datasource {}: {}", datasourceId, e.getMessage(), e);
+            throw new IllegalArgumentException(
+                    "SQL execution failed for datasource " + datasourceId, e);
         }
     }
 
@@ -167,6 +181,7 @@ public class DatabaseQueryExecutor {
         SqlSessionFactory factory = ibatisCache.computeIfAbsent(ibatisKey, k -> {
             Configuration configuration = new Configuration();
             configuration.setMapUnderscoreToCamelCase(true);
+            configuration.setDefaultStatementTimeout(queryTimeoutSeconds);
             configuration.getTypeAliasRegistry().registerAlias("map", Map.class);
 
             String xml = buildMapperXml(namespace, queryContent);
@@ -179,8 +194,9 @@ public class DatabaseQueryExecutor {
                         configuration.getSqlFragments());
                 builder.parse();
             } catch (Exception e) {
+                log.warn("IBATIS XML parse error for datasource {}: {}", datasourceId, e.getMessage(), e);
                 throw new IllegalArgumentException(
-                        "IBATIS XML parse error for datasource " + datasourceId + ": " + e.getMessage(), e);
+                        "IBATIS XML parse error for datasource " + datasourceId, e);
             }
 
             configuration.setEnvironment(
@@ -190,12 +206,30 @@ public class DatabaseQueryExecutor {
         });
 
         try (SqlSession session = factory.openSession()) {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> rows = (List<Map<String, Object>>) (List<?>) session.selectList(namespace + ".execute", params);
+            List<Map<String, Object>> rows = new ArrayList<>();
 
-            if (rows.size() > maxMemoryRows) {
-                log.warn("IBATIS query returned {} rows (limit: {}) for datasource {}, consider adding database-level pagination",
-                        rows.size(), maxMemoryRows, datasourceId);
+            // Hard memory guard: accumulate rows through a ResultHandler that
+            // throws as soon as the result set exceeds maxMemoryRows. This
+            // aborts iteration mid-fetch, preventing the full result set from
+            // ever being materialized in memory (the previous selectList
+            // approach only warned AFTER the entire result was loaded).
+            ResultHandler<Map<String, Object>> resultHandler = resultContext -> {
+                if (rows.size() >= maxMemoryRows) {
+                    throw new IllegalArgumentException(
+                            "Query exceeded max-memory-rows limit " + maxMemoryRows
+                                    + " for datasource " + datasourceId);
+                }
+                rows.add(resultContext.getResultObject());
+            };
+
+            try {
+                session.select(namespace + ".execute", params, resultHandler);
+            } catch (PersistenceException e) {
+                // MyBatis wraps exceptions thrown by the ResultHandler in a
+                // PersistenceException (ExceptionFactory.wrapException). Unwrap
+                // the limit IllegalArgumentException so it maps to 400 (see
+                // GlobalExceptionHandler) instead of a generic 500.
+                throw unwrapLimitExceeded(e);
             }
 
             // For IBATIS queries, pagination is applied in-memory since the
@@ -231,6 +265,22 @@ public class DatabaseQueryExecutor {
         jdbcTemplateCache.remove(datasourceId);
         String prefix = datasourceId + ":";
         ibatisCache.keySet().removeIf(key -> key.startsWith(prefix));
+    }
+
+    /**
+     * Walk the cause chain of a MyBatis {@link PersistenceException} and return
+     * the limit-exceeded {@link IllegalArgumentException} thrown by the row
+     * ResultHandler, if present. Otherwise return the PersistenceException.
+     */
+    private RuntimeException unwrapLimitExceeded(PersistenceException e) {
+        for (Throwable cause = e.getCause(); cause != null; cause = cause.getCause()) {
+            if (cause instanceof IllegalArgumentException iae
+                    && iae.getMessage() != null
+                    && iae.getMessage().contains("exceeded max-memory-rows limit")) {
+                return iae;
+            }
+        }
+        return e;
     }
 
     // ---- Private helpers ----

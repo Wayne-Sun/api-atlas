@@ -20,17 +20,17 @@ public class DataSourceFactoryConfig {
     private int keepaliveTime;
 
     @Bean
-    public DatabaseClientFactory mySqlClientFactory() {
-        return new DatabaseClientFactory("MySQL", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime);
+    public DatabaseClientFactory mySqlClientFactory(HostSecurityValidator hostSecurityValidator) {
+        return new DatabaseClientFactory("MySQL", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime, hostSecurityValidator);
     }
 
     @Bean
-    public DatabaseClientFactory postgreSqlClientFactory() {
-        return new DatabaseClientFactory("PostgreSQL", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime);
+    public DatabaseClientFactory postgreSqlClientFactory(HostSecurityValidator hostSecurityValidator) {
+        return new DatabaseClientFactory("PostgreSQL", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime, hostSecurityValidator);
     }
 
     @Bean
-    public DatabaseClientFactory dorisClientFactory() {
-        return new DatabaseClientFactory("Doris", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime);
+    public DatabaseClientFactory dorisClientFactory(HostSecurityValidator hostSecurityValidator) {
+        return new DatabaseClientFactory("Doris", maximumPoolSize, minimumIdle, maximumLifetime, keepaliveTime, hostSecurityValidator);
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -76,5 +77,26 @@ class RedisTokenServiceTest {
         when(valueOps.get("token:nonexistent")).thenReturn(null);
 
         assertFalse(redisTokenService.exists("nonexistent"));
+    }
+
+    @Test
+    void revokeAll_DeletesAllKeys() {
+        Set<String> keys = Set.of("token:aaa", "token:bbb", "token:ccc");
+        when(redisTemplate.keys("token:*")).thenReturn(keys);
+
+        redisTokenService.revokeAll();
+
+        verify(redisTemplate).keys("token:*");
+        verify(redisTemplate).delete(keys);
+    }
+
+    @Test
+    void revokeAll_NoKeys_DoesNotCallDelete() {
+        when(redisTemplate.keys("token:*")).thenReturn(Set.of());
+
+        redisTokenService.revokeAll();
+
+        verify(redisTemplate).keys("token:*");
+        verify(redisTemplate, never()).delete(anyCollection());
     }
 }

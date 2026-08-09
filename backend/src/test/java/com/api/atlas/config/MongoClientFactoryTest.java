@@ -7,15 +7,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MongoClientFactoryTest {
@@ -25,12 +26,13 @@ class MongoClientFactoryTest {
     @Mock
     private MongoClient mockClient;
 
+    @Mock
+    private HostSecurityValidator hostSecurityValidator;
+
     @BeforeEach
     void setUp() {
-        factory = new MongoClientFactory();
-        ReflectionTestUtils.setField(factory, "connectTimeoutMs", 5000);
-        ReflectionTestUtils.setField(factory, "serverSelectionTimeoutMs", 5000);
-        ReflectionTestUtils.setField(factory, "socketTimeoutMs", 60000);
+        // @Mock validator defaults to false (not blocked) — existing localhost fixtures stay valid.
+        factory = new MongoClientFactory(hostSecurityValidator, 5000, 5000, 60000);
     }
 
     @Test
@@ -68,6 +70,63 @@ class MongoClientFactoryTest {
 
         ConnectionString reparsed = assertDoesNotThrow(() -> new ConnectionString(cs.toString()));
         assertArrayEquals(password.toCharArray(), reparsed.getCredential().getPassword());
+    }
+
+    @Test
+    void buildConnectionString_FullUriWithEmbeddedCredentials_ThrowsIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                factory.buildConnectionString("mongodb://user:pass@127.0.0.1:27017", 27017, null, null));
+
+        assertTrue(ex.getMessage().contains("Credentials must not be embedded in the connection string"),
+                "expected embedded-credentials rejection but was: " + ex.getMessage());
+    }
+
+    @Test
+    void buildConnectionString_FullUriWithBlockedHost_ThrowsIllegalArgumentException() {
+        when(hostSecurityValidator.isBlocked("127.0.0.1")).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                factory.buildConnectionString("mongodb://127.0.0.1:27017", 27017, null, null));
+
+        assertTrue(ex.getMessage().contains("Host not allowed"), "expected host rejection but was: " + ex.getMessage());
+        verify(hostSecurityValidator).isBlocked("127.0.0.1");
+    }
+
+    @Test
+    void buildConnectionString_FullUriWithPublicHost_ReturnsParsedConnectionString() {
+        ConnectionString cs = assertDoesNotThrow(() ->
+                factory.buildConnectionString("mongodb://8.8.8.8:27017", 27017, null, null));
+
+        assertTrue(cs.getHosts().contains("8.8.8.8:27017"), "hosts should contain 8.8.8.8:27017 but was: " + cs.getHosts());
+        assertNull(cs.getCredential());
+    }
+
+    @Test
+    void buildConnectionString_SrvUriWithPublicHost_ReturnsParsedConnectionString() {
+        ConnectionString cs = assertDoesNotThrow(() ->
+                factory.buildConnectionString("mongodb+srv://db.example.com", 27017, null, null));
+
+        assertTrue(cs.isSrvProtocol(), "expected srv protocol for mongodb+srv URI");
+        assertTrue(cs.getHosts().contains("db.example.com"), "hosts should contain db.example.com but was: " + cs.getHosts());
+        verify(hostSecurityValidator).isBlocked("db.example.com");
+    }
+
+    @Test
+    void buildConnectionString_PlainHostBlocked_ThrowsIllegalArgumentException() {
+        when(hostSecurityValidator.isBlocked("127.0.0.1")).thenReturn(true);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                factory.buildConnectionString("127.0.0.1", 27017, null, null));
+
+        assertTrue(ex.getMessage().contains("Host not allowed"), "expected host rejection but was: " + ex.getMessage());
+    }
+
+    @Test
+    void createClient_PublicHost_ReturnsMongoClient() {
+        MongoClient client = factory.createClient("8.8.8.8", 27017, "testdb", null, null, null);
+
+        assertNotNull(client);
+        factory.destroyClient(client);
     }
 
     @Test

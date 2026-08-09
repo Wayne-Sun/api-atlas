@@ -11,8 +11,8 @@ const { mockStore, mockPush, mockAuthStore } = vi.hoisted(() => ({
     list: [],
     total: 0,
     loading: false,
-    toggleStatus: vi.fn(),
     remove: vi.fn(),
+    updateStatus: vi.fn(),
   },
   mockAuthStore: {
     isAdmin: false,
@@ -35,22 +35,21 @@ vi.mock('naive-ui', () => ({
     },
   },
   NTag: { name: 'NTag' },
-  NSwitch: { name: 'NSwitch' },
   NSpace: { name: 'NSpace' },
   NInput: { name: 'NInput' },
   NSelect: { name: 'NSelect' },
   NEmpty: { name: 'NEmpty' },
   NCard: { name: 'NCard' },
   NPopconfirm: { name: 'NPopconfirm' },
-  useMessage: () => ({ error: vi.fn() }),
+  useMessage: () => ({ success: vi.fn(), error: vi.fn() }),
 }))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
-vi.mock('@/stores/datasource', () => ({
-  useDatasourceStore: () => mockStore,
+vi.mock('@/stores/interface', () => ({
+  useInterfaceStore: () => mockStore,
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -74,7 +73,7 @@ const stubs = {
     },
   },
   NSpace: {
-    setup(_: any, { slots }: any) {
+    setup(_: unknown, { slots }: { slots: Record<string, (() => unknown) | undefined> }) {
       return () => h('div', null, slots.default?.())
     },
   },
@@ -90,38 +89,14 @@ function createWrapper() {
   return mount(Index, { global: { stubs } })
 }
 
-describe('index.vue', () => {
+describe('interface/index.vue', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mockStore.list = []
     mockStore.total = 0
   })
 
-  it('filter type dropdown options include MongoDB', async () => {
-    const wrapper = createWrapper()
-    await flushPromises()
-
-    const select = wrapper.findComponent({ name: 'NSelect' })
-    const options = select.props('options') as { label: string; value: string }[]
-    expect(options).toEqual(
-      expect.arrayContaining([{ label: 'MongoDB', value: 'MongoDB' }])
-    )
-    wrapper.unmount()
-  })
-
-  it('filter type dropdown options include Doris', async () => {
-    const wrapper = createWrapper()
-    await flushPromises()
-
-    const select = wrapper.findComponent({ name: 'NSelect' })
-    const options = select.props('options') as { label: string; value: string }[]
-    expect(options).toEqual(
-      expect.arrayContaining([{ label: 'Doris', value: 'Doris' }])
-    )
-    wrapper.unmount()
-  })
-
-  it('fetches datasource list on mount', async () => {
+  it('fetches interface list on mount', async () => {
     const wrapper = createWrapper()
     await flushPromises()
 
@@ -157,7 +132,7 @@ describe('index.vue', () => {
     const wrapper = createWrapper()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('新增数据源')
+    expect(wrapper.text()).toContain('新增接口')
     mockAuthStore.isAdmin = false
     wrapper.unmount()
   })
@@ -167,7 +142,7 @@ describe('index.vue', () => {
     const wrapper = createWrapper()
     await flushPromises()
 
-    expect(wrapper.text()).not.toContain('新增数据源')
+    expect(wrapper.text()).not.toContain('新增接口')
     wrapper.unmount()
   })
 })

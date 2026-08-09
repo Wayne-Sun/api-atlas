@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -21,7 +22,11 @@ class DatabaseClientFactoryTest {
     private static final int KEEPALIVE = 300000;
 
     private DatabaseClientFactory newFactory(String databaseType) {
-        return new DatabaseClientFactory(databaseType, MAX_POOL_SIZE, MIN_IDLE, MAX_LIFETIME, KEEPALIVE);
+        // Permissive validator (allow-private-hosts=true) keeps the existing
+        // "localhost" URL-construction fixtures valid — host blocking is tested
+        // separately with a strict validator below.
+        return new DatabaseClientFactory(databaseType, MAX_POOL_SIZE, MIN_IDLE, MAX_LIFETIME, KEEPALIVE,
+                new HostSecurityValidator(true));
     }
 
     private String jdbcUrlOf(String databaseType) {
@@ -61,5 +66,29 @@ class DatabaseClientFactoryTest {
 
         assertTrue(jdbcUrl.startsWith("jdbc:mysql://"), "MySQL URL must start with jdbc:mysql:// but was: " + jdbcUrl);
         assertFalse(jdbcUrl.contains("useServerPrepStmts=false"), "MySQL URL must not contain useServerPrepStmts=false: " + jdbcUrl);
+    }
+
+    @Test
+    void createClient_PrivateHost_ThrowsIllegalArgumentException() {
+        DatabaseClientFactory factory = new DatabaseClientFactory("MySQL", MAX_POOL_SIZE, MIN_IDLE, MAX_LIFETIME, KEEPALIVE,
+                new HostSecurityValidator(false));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                factory.createClient("192.168.0.5", 3306, "db", "user", "pass", null));
+
+        assertTrue(ex.getMessage().contains("Host not allowed"), "expected host rejection but was: " + ex.getMessage());
+    }
+
+    @Test
+    void createClient_PublicHost_ReturnsHikariDataSource() {
+        DatabaseClientFactory factory = new DatabaseClientFactory("MySQL", MAX_POOL_SIZE, MIN_IDLE, MAX_LIFETIME, KEEPALIVE,
+                new HostSecurityValidator(false));
+
+        HikariDataSource ds = assertInstanceOf(HikariDataSource.class,
+                assertDoesNotThrow(() -> factory.createClient("8.8.8.8", 3306, "public_db", "user", "pass", null)));
+
+        assertTrue(ds.getJdbcUrl().startsWith("jdbc:mysql://8.8.8.8:3306/public_db"),
+                "unexpected JDBC URL: " + ds.getJdbcUrl());
+        ds.close();
     }
 }

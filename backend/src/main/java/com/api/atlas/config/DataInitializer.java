@@ -48,7 +48,7 @@ public class DataInitializer implements CommandLineRunner {
 
             userMapper.insert(admin);
 
-            log.warn("Default admin user created — username: admin, password: {}. CHANGE IMMEDIATELY.", password);
+            log.warn("Default admin user created — configure admin credentials via atlas.admin settings before first login");
         }
     }
 }

@@ -47,6 +47,9 @@ atlas:
     connect-timeout-ms: 5000
     server-selection-timeout-ms: 5000
     socket-timeout-ms: 60000
+  security:
+    redis-fail-closed: true
+    allow-private-hosts: false
   datasource:
     hikari:
       maximum-pool-size: 5
@@ -54,6 +57,7 @@ atlas:
       maximum-lifetime: 1800000
       keepalive-time: 300000
   executor:
+    query-timeout-seconds: 30
     ibatis:
       max-memory-rows: 100000
       cache-max-size: 100

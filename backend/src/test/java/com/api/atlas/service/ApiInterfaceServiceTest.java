@@ -29,6 +29,10 @@ import java.util.NoSuchElementException;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -509,6 +513,63 @@ class ApiInterfaceServiceTest {
         assertThatThrownBy(() -> service.testInterface(1L, Map.of(), 1, 10))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("UNSUPPORTED");
+    }
+
+    // ---- Param type-coercion (security) ----
+
+    @Test
+    @DisplayName("测试接口 - 声明为 Integer 的参数传入非数字值抛出 IllegalArgumentException")
+    void testInterface_DeclaredIntegerParam_Mismatch_ThrowsIllegalArgumentException() {
+        // Arrange
+        ApiInterface iface = new ApiInterface();
+        iface.setId(7L);
+        iface.setStatus("PENDING_TEST");
+        iface.setDataSourceId(10L);
+        iface.setQueryType("SQL");
+        iface.setQueryContent("SELECT * FROM users WHERE id = ${id}");
+        when(mapper.selectById(7L)).thenReturn(iface);
+
+        InterfaceParam declared = new InterfaceParam();
+        declared.setParamName("id");
+        declared.setJavaType("Integer");
+        when(paramMapper.selectByInterfaceId(7L)).thenReturn(List.of(declared));
+
+        // Act & Assert
+        assertThatThrownBy(() -> service.testInterface(7L, Map.of("id", "abc"), 1, 10))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid type for param id")
+                .hasMessageContaining("expected Integer");
+
+        verify(databaseQueryExecutor, never()).executeSql(anyLong(), anyString(), anyMap(), anyInt(), anyInt());
+    }
+
+    @Test
+    @DisplayName("测试接口 - 声明为 Integer 的参数 '42' 被强转为 Integer 42 后委托执行器")
+    void testInterface_DeclaredIntegerParam_CoercesValidValueToInteger() {
+        // Arrange
+        ApiInterface iface = new ApiInterface();
+        iface.setId(8L);
+        iface.setStatus("PENDING_TEST");
+        iface.setDataSourceId(10L);
+        iface.setQueryType("SQL");
+        iface.setQueryContent("SELECT * FROM users WHERE id = ${id}");
+        when(mapper.selectById(8L)).thenReturn(iface);
+
+        InterfaceParam declared = new InterfaceParam();
+        declared.setParamName("id");
+        declared.setJavaType("Integer");
+        when(paramMapper.selectByInterfaceId(8L)).thenReturn(List.of(declared));
+
+        QueryResult expected = new QueryResult();
+        when(databaseQueryExecutor.executeSql(10L, iface.getQueryContent(), Map.of("id", 42), 1, 10))
+                .thenReturn(expected);
+
+        // Act
+        QueryResult result = service.testInterface(8L, Map.of("id", "42"), 1, 10);
+
+        // Assert
+        assertThat(result).isSameAs(expected);
+        verify(databaseQueryExecutor).executeSql(10L, iface.getQueryContent(), Map.of("id", 42), 1, 10);
     }
 
     // ---- DataSourceEventPublisher ----

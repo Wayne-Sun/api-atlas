@@ -134,7 +134,7 @@ Spring Boot 4.1 + JDK 21 + MyBatis + PageHelper + MySQL + Redis.
 - `DataInitializer` (`@Profile("!test")`, `CommandLineRunner`):
   - Creates admin user on first startup (empty DB).
   - Password from `atlas.admin.default-password` (must not be `"CHANGE_ME"`).
-  - Falls back to random UUID password (logged as warning).
+  - Falls back to random UUID password (not logged).
 - `UserInfoDTO` used for API responses — password field is NEVER exposed.
 - User entity supports `ENABLED` / `DISABLED` status.
 

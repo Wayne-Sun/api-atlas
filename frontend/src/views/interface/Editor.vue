@@ -3,12 +3,14 @@ import { h, ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInterfaceStore } from '@/stores/interface'
 import { useDatasourceStore } from '@/stores/datasource'
+import { useAuthStore } from '@/stores/auth'
 import { NForm, NFormItem, NInput, NInputNumber, NSelect, NButton, NSwitch, NSpace, NDataTable, NCard, useMessage } from 'naive-ui'
 
 const router = useRouter()
 const route = useRoute()
 const interfaceStore = useInterfaceStore()
 const datasourceStore = useDatasourceStore()
+const authStore = useAuthStore()
 const message = useMessage()
 
 const isEdit = computed(() => !!route.params.id)
@@ -294,7 +296,7 @@ function handleCancel() {
         在查询内容中使用 ${paramName} 自动生成参数
       </div>
 
-      <NSpace justify="center" style="margin-top: 24px;">
+      <NSpace v-if="authStore.isAdmin" justify="center" style="margin-top: 24px;">
         <NButton type="primary" @click="handleSave" :loading="saving">保存</NButton>
         <NButton @click="handleCancel">取消</NButton>
       </NSpace>

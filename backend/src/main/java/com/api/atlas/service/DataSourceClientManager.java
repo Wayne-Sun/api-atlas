@@ -2,6 +2,7 @@ package com.api.atlas.service;
 
 import com.api.atlas.config.DataSourceFactoryRegistry;
 import com.api.atlas.config.EncryptionUtil;
+import com.api.atlas.config.HostSecurityValidator;
 import com.api.atlas.mapper.DataSourceMapper;
 import com.api.atlas.model.DataSource;
 import com.api.atlas.service.executor.DatabaseQueryExecutor;
@@ -33,6 +34,7 @@ public class DataSourceClientManager {
     private final GenericApplicationContext applicationContext;
     private final List<DataSourceEventPublisher> eventPublishers;
     private final DatabaseQueryExecutor databaseQueryExecutor;
+    private final HostSecurityValidator hostSecurityValidator;
 
     @Autowired
     public DataSourceClientManager(DataSourceFactoryRegistry factoryRegistry,
@@ -40,13 +42,15 @@ public class DataSourceClientManager {
                                    SecretKey secretKey,
                                GenericApplicationContext applicationContext,
                                @Lazy List<DataSourceEventPublisher> eventPublishers,
-                               @Lazy DatabaseQueryExecutor databaseQueryExecutor) {
+                               @Lazy DatabaseQueryExecutor databaseQueryExecutor,
+                               HostSecurityValidator hostSecurityValidator) {
         this.factoryRegistry = factoryRegistry;
         this.dataSourceMapper = dataSourceMapper;
         this.secretKey = secretKey;
         this.applicationContext = applicationContext;
         this.eventPublishers = eventPublishers;
         this.databaseQueryExecutor = databaseQueryExecutor;
+        this.hostSecurityValidator = hostSecurityValidator;
     }
 
     /**
@@ -67,6 +71,8 @@ public class DataSourceClientManager {
                     || mongoClientMap.containsKey(datasourceId)) {
                 return;
             }
+
+            validateHost(ds.getHost());
 
             String plainPassword = decrypt(ds.getPassword());
 
@@ -162,6 +168,7 @@ public class DataSourceClientManager {
             if (!"MySQL".equals(type) && !"PostgreSQL".equals(type) && !"Doris".equals(type)) {
                 throw new IllegalArgumentException("Unsupported datasource type: " + type);
             }
+            validateHost(ds.getHost());
             try {
                 javax.sql.DataSource client = (javax.sql.DataSource) factoryRegistry.getFactory(type)
                         .createClient(ds.getHost(), ds.getPort(), ds.getDatabaseName(),
@@ -224,6 +231,7 @@ public class DataSourceClientManager {
             if (ds == null || !"ENABLED".equals(ds.getStatus())) {
                 throw new IllegalArgumentException("DataSource not enabled: " + id);
             }
+            validateHost(ds.getHost());
             try {
                 return createMongoClient(ds, datasourceId);
             } catch (Exception e) {
@@ -246,6 +254,7 @@ public class DataSourceClientManager {
     }
 
     private MongoClient createMongoClient(DataSource ds, String datasourceId) throws Exception {
+        validateHost(ds.getHost());
         MongoClient client = (MongoClient) factoryRegistry.getFactory("MongoDB")
                 .createClient(ds.getHost(), ds.getPort(), ds.getDatabaseName(),
                         ds.getUsername(), decrypt(ds.getPassword()), ds.getApiKey());
@@ -258,5 +267,11 @@ public class DataSourceClientManager {
 
     private String decrypt(String ciphertext) {
         return EncryptionUtil.decrypt(ciphertext, secretKey);
+    }
+
+    private void validateHost(String host) {
+        if (hostSecurityValidator.isBlocked(host)) {
+            throw new IllegalArgumentException("Host not allowed");
+        }
     }
 }

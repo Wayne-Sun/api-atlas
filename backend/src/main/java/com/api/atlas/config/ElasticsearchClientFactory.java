@@ -16,12 +16,20 @@ import org.springframework.stereotype.Component;
 public class ElasticsearchClientFactory implements DataSourceFactory<ElasticsearchClient> {
 
     private final JsonpMapper mapper = new SimpleJsonpMapper();
+    private final HostSecurityValidator hostSecurityValidator;
+    private final String esProtocol;
 
-    @Value("${atlas.elasticsearch.protocol:http}")
-    private String esProtocol;
+    public ElasticsearchClientFactory(HostSecurityValidator hostSecurityValidator,
+                                      @Value("${atlas.elasticsearch.protocol:http}") String esProtocol) {
+        this.hostSecurityValidator = hostSecurityValidator;
+        this.esProtocol = esProtocol;
+    }
 
     @Override
     public ElasticsearchClient createClient(String host, int port, String databaseName, String username, String password, String apiKey) throws Exception {
+        if (hostSecurityValidator.isBlocked(host)) {
+            throw new IllegalArgumentException("Host not allowed");
+        }
         HttpHost httpHost = new HttpHost(host, port, esProtocol);
         RestClientBuilder builder = RestClient.builder(httpHost)
                 .setRequestConfigCallback(requestConfigBuilder -> requestConfigBuilder

@@ -11,17 +11,23 @@ public class DatabaseClientFactory implements DataSourceFactory<DataSource> {
     private int keepaliveTime;
 
     private final String databaseType;
+    private final HostSecurityValidator hostSecurityValidator;
 
-    public DatabaseClientFactory(String databaseType, int maximumPoolSize, int minimumIdle, int maximumLifetime, int keepaliveTime) {
+    public DatabaseClientFactory(String databaseType, int maximumPoolSize, int minimumIdle, int maximumLifetime, int keepaliveTime,
+                                 HostSecurityValidator hostSecurityValidator) {
         this.databaseType = databaseType;
         this.maximumPoolSize = maximumPoolSize;
         this.minimumIdle = minimumIdle;
         this.maximumLifetime = maximumLifetime;
         this.keepaliveTime = keepaliveTime;
+        this.hostSecurityValidator = hostSecurityValidator;
     }
 
     @Override
     public DataSource createClient(String host, int port, String databaseName, String username, String password, String apiKey) throws Exception {
+        if (hostSecurityValidator.isBlocked(host)) {
+            throw new IllegalArgumentException("Host not allowed");
+        }
         String dbName = (databaseName != null && !databaseName.isEmpty()) ? databaseName : "";
         String jdbcUrl;
         if ("PostgreSQL".equals(databaseType)) {
